@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+import time
 import argparse
 
 from .config import ExtractorConfig
 from .factory import create_extractor
 from .io import read_datalist, save_datalist_json, save_feature_vector
+from .logging_utils import configure_logging
 from .preprocessing import ImagePreprocessConfig, get_profile, list_profiles
 from .registry import list_backends
 from .runner import extract_datalist
@@ -26,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--nmax", type=int, default=-1)
 	parser.add_argument("--skip-errors", action="store_true")
 	parser.add_argument("--profile", choices=list_profiles())
+	parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO", help="Logging level (default=INFO)")
 
 	parser.add_argument("--model", help="Model file/path/name, depending on backend")
 	parser.add_argument("--model-weights", help="Optional TensorFlow weights file")
@@ -103,35 +107,109 @@ def _config_from_args(args) -> ExtractorConfig:
 		},
 	)
 
-
 def main(argv=None) -> int:
 	"""CLI entry point."""
 	parser = build_parser()
 	args = parser.parse_args(argv)
 
+	configure_logging(args.log_level)
+
+	start_time = time.perf_counter()
+
+	logger.info("Starting fextractor")
+	logger.info(
+		"Configuration: backend='%s' model='%s' profile='%s'",
+		args.backend,
+		args.model,
+		args.profile,
+	)
+
+	logger.debug(
+		"CLI arguments: %s",
+		vars(args),
+	)
+
 	try:
 		config = _config_from_args(args)
+
+		logger.info(
+			"Creating extractor backend='%s'",
+			config.backend,
+		)
+
 		extractor = create_extractor(config)
 
 		if args.image:
+			logger.info(
+				"Extracting representation from image='%s'",
+				args.image,
+			)
+
 			features = extractor.extract(args.image)
-			save_feature_vector(features, args.outfile, metadata=extractor.metadata())
+
+			logger.info(
+				"Extracted representation with %d features",
+				len(features),
+			)
+
+			save_feature_vector(
+				features,
+				args.outfile,
+				metadata=extractor.metadata(),
+			)
+
 		else:
-			datalist = read_datalist(args.inputfile, key=args.datalist_key)
+			logger.info(
+				"Reading datalist='%s' key='%s'",
+				args.inputfile,
+				args.datalist_key,
+			)
+
+			datalist = read_datalist(
+				args.inputfile,
+				key=args.datalist_key,
+			)
+
+			logger.info(
+				"Loaded datalist entries=%d",
+				len(datalist),
+			)
+
 			datalist = extract_datalist(
 				datalist,
 				extractor,
 				nmax=args.nmax,
 				skip_errors=args.skip_errors,
 			)
+
 			save_datalist_json(
 				datalist,
 				args.outfile,
 				key=args.datalist_key,
 				metadata=extractor.metadata(),
 			)
-	except Exception as exc:
-		parser.error(str(exc))
+
+		elapsed = time.perf_counter() - start_time
+
+		logger.info(
+			"Output written to '%s'",
+			args.outfile,
+		)
+
+		logger.info(
+			"fextractor completed successfully in %.3fs",
+			elapsed,
+		)
+
+	except Exception:
+		elapsed = time.perf_counter() - start_time
+
+		logger.exception(
+			"fextractor failed after %.3fs",
+			elapsed,
+		)
+
+		return 1
 
 	return 0
 

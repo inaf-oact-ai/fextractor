@@ -24,6 +24,10 @@ tensorflow = [
 	"tensorflow>=2.10",
 	"tf-keras>=2.10"
 ]
+tensorflow-gpu = [
+	"tensorflow[and-cuda]>=2.10",
+	"tf-keras>=2.10"
+]
 dino = [
 	"torch>=2.0",
 	"torchvision>=0.15"

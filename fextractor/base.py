@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 
+logger = logging.getLogger(__name__)
 
 class FeatureExtractor(ABC):
 	"""Base class for pretrained feature/representation extractors."""
@@ -32,10 +35,21 @@ class FeatureExtractor(ABC):
 		"""Extract one feature vector from one source."""
 
 	def ensure_loaded(self) -> None:
-		"""Load the model on first use."""
-		if not self._loaded:
-			self.load_model()
-			self._loaded = True
+	"""Load the model on first use."""
+	if not self._loaded:
+		logger.info(
+			"Loading extractor backend='%s' modality='%s'",
+			self.backend,
+			self.modality,
+		)
+
+		self.load_model()
+		self._loaded = True
+
+		logger.info(
+			"Extractor backend='%s' loaded successfully",
+			self.backend,
+		)
 
 	def extract_many(self, sources: Iterable[str | Path]) -> list[np.ndarray]:
 		"""Extract representations from several sources."""
