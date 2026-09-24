@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fextractor"
+version = "0.1.0"
+description = "Feature and representation extraction from pretrained machine-learning models for scientific data"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+	{name = "SKA-INAF"}
+]
+dependencies = [
+	"numpy>=1.22",
+	"astropy>=5.0",
+	"Pillow>=9.0",
+	"scikit-image>=0.19"
+]
+
+[project.optional-dependencies]
+tensorflow = [
+	"tensorflow>=2.10"
+]
+dino = [
+	"torch>=2.0",
+	"torchvision>=0.15"
+]
+siglip = [
+	"torch>=2.0",
+	"transformers>=4.40"
+]
+all = [
+	"tensorflow>=2.10",
+	"torch>=2.0",
+	"torchvision>=0.15",
+	"transformers>=4.40"
+]
+test = [
+	"pytest>=7.0"
+]
+
+[project.scripts]
+fextractor = "fextractor.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fextractor*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
