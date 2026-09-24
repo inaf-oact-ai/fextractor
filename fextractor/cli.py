@@ -14,6 +14,7 @@ from .preprocessing import ImagePreprocessConfig, get_profile, list_profiles
 from .registry import list_backends
 from .runner import extract_datalist
 
+logger = logging.getLogger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
 	"""Build the command-line parser."""
