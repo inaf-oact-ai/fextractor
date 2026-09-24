@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from ..base import FeatureExtractor
+from ..config import ExtractorConfig
 from ..image_utils import ensure_channels, resize_square
 from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, read_image
 
@@ -81,3 +82,17 @@ class TensorFlowFeatureExtractor(FeatureExtractor):
 			"preprocessing": self.preprocessing.__dict__.copy(),
 		})
 		return metadata
+
+
+def create(config: ExtractorConfig) -> TensorFlowFeatureExtractor:
+	"""Create a TensorFlow extractor from a backend-neutral configuration."""
+	if not config.model:
+		raise ValueError("A model path is required for the TensorFlow backend")
+
+	return TensorFlowFeatureExtractor(
+		model_path=config.model,
+		weights_path=config.model_weights,
+		imgsize=config.imgsize if config.imgsize is not None else 224,
+		in_chans=config.in_chans if config.in_chans is not None else 1,
+		preprocessing=config.preprocessing,
+	)

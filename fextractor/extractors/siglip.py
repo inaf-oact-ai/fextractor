@@ -8,8 +8,12 @@ import numpy as np
 from PIL import Image
 
 from ..base import FeatureExtractor
+from ..config import ExtractorConfig
 from ..image_utils import ensure_channels, to_uint8_rgb
 from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, read_image
+
+
+DEFAULT_MODEL = "google/siglip-so400m-patch14-384"
 
 
 class SigLIPFeatureExtractor(FeatureExtractor):
@@ -20,7 +24,7 @@ class SigLIPFeatureExtractor(FeatureExtractor):
 
 	def __init__(
 		self,
-		model_name: str = "google/siglip-so400m-patch14-384",
+		model_name: str = DEFAULT_MODEL,
 		device: str = "cuda",
 		imgsize: int | None = None,
 		reset_meanstd: bool = False,
@@ -105,3 +109,15 @@ class SigLIPFeatureExtractor(FeatureExtractor):
 			"preprocessing": self.preprocessing.__dict__.copy(),
 		})
 		return metadata
+
+
+def create(config: ExtractorConfig) -> SigLIPFeatureExtractor:
+	"""Create a SigLIP extractor from a backend-neutral configuration."""
+	return SigLIPFeatureExtractor(
+		model_name=config.model or DEFAULT_MODEL,
+		device=config.device,
+		imgsize=config.imgsize,
+		reset_meanstd=bool(config.get_option("reset_meanstd", False)),
+		reset_rescale=bool(config.get_option("reset_rescale", False)),
+		preprocessing=config.preprocessing,
+	)

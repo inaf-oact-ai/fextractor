@@ -8,8 +8,12 @@ import numpy as np
 from PIL import Image
 
 from ..base import FeatureExtractor
+from ..config import ExtractorConfig
 from ..image_utils import to_uint8_rgb
 from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, read_image
+
+
+DEFAULT_MODEL = "dinov2_vits14"
 
 
 class DINOv2FeatureExtractor(FeatureExtractor):
@@ -20,7 +24,7 @@ class DINOv2FeatureExtractor(FeatureExtractor):
 
 	def __init__(
 		self,
-		model_name: str = "dinov2_vits14",
+		model_name: str = DEFAULT_MODEL,
 		device: str = "cuda",
 		imgsize: int = 224,
 		preprocessing: ImagePreprocessConfig | None = None,
@@ -84,3 +88,13 @@ class DINOv2FeatureExtractor(FeatureExtractor):
 			"preprocessing": self.preprocessing.__dict__.copy(),
 		})
 		return metadata
+
+
+def create(config: ExtractorConfig) -> DINOv2FeatureExtractor:
+	"""Create a DINOv2 extractor from a backend-neutral configuration."""
+	return DINOv2FeatureExtractor(
+		model_name=config.model or DEFAULT_MODEL,
+		device=config.device,
+		imgsize=config.imgsize if config.imgsize is not None else 224,
+		preprocessing=config.preprocessing,
+	)
