@@ -41,8 +41,26 @@ class TensorFlowFeatureExtractor(FeatureExtractor):
 		self.keras_loader = keras_loader
 		self.model = None
 
+	def _configure_gpu_memory(self) -> None:
+		"""Enable incremental TensorFlow GPU memory allocation."""
+		try:
+			import tensorflow as tf
+		except ImportError:
+			return
+
+		gpus = tf.config.list_physical_devices("GPU")
+
+		for gpu in gpus:
+			try:
+				tf.config.experimental.set_memory_growth(gpu, True)
+			except RuntimeError:
+				pass
+
 	def load_model(self) -> None:
 		"""Load the Keras model and optional separate weights file."""
+		
+		self._configure_gpu_memory()
+		
 		if self.keras_loader == "keras":
 			self.model = self._load_with_keras()
 
