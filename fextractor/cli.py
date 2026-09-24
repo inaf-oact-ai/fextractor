@@ -29,6 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 	parser.add_argument("--model", help="Model file/path/name, depending on backend")
 	parser.add_argument("--model-weights", help="Optional TensorFlow weights file")
+	parser.add_argument("--keras-loader", choices=("auto", "keras", "tf_keras"), default="auto", help="TensorFlow: model loader to use (default=auto)")
+	
 	parser.add_argument("--device", default="cuda")
 	parser.add_argument("--imgsize", type=int)
 	parser.add_argument("--in-chans", type=int)
@@ -95,6 +97,7 @@ def _config_from_args(args) -> ExtractorConfig:
 		in_chans=in_chans,
 		preprocessing=preprocessing,
 		options={
+			"keras_loader": args.keras_loader,
 			"reset_meanstd": args.reset_meanstd,
 			"reset_rescale": args.reset_rescale,
 		},

@@ -29,25 +29,75 @@ class TensorFlowFeatureExtractor(FeatureExtractor):
 		imgsize: int = 224,
 		in_chans: int = 1,
 		preprocessing: ImagePreprocessConfig | None = None,
+		keras_loader: str = "auto",
 	) -> None:
+		""" Constructor """
 		super().__init__()
 		self.model_path = str(model_path)
 		self.weights_path = str(weights_path) if weights_path else None
 		self.imgsize = imgsize
 		self.in_chans = in_chans
 		self.preprocessing = preprocessing or ImagePreprocessConfig()
+		self.keras_loader = keras_loader
 		self.model = None
 
 	def load_model(self) -> None:
 		"""Load the Keras model and optional separate weights file."""
+		if self.keras_loader == "keras":
+			self.model = self._load_with_keras()
+
+		elif self.keras_loader == "tf_keras":
+			self.model = self._load_with_tf_keras()
+
+		elif self.keras_loader == "auto":
+			try:
+				self.model = self._load_with_keras()
+			except Exception as exc:
+				print(
+					"WARNING: Failed to load model with current tf.keras "
+					f"({type(exc).__name__}: {exc}). "
+					"Retrying with legacy tf_keras ..."
+				)
+				self.model = self._load_with_tf_keras()
+
+		else:
+			raise ValueError(
+				f"Unsupported keras loader '{self.keras_loader}'. "
+				"Supported values: auto, keras, tf_keras"
+			)
+
+		if self.weights_path:
+			self.model.load_weights(self.weights_path)
+
+	def _load_with_keras(self):
+		"""Load model using the current TensorFlow/Keras implementation."""
 		try:
 			from tensorflow.keras.models import load_model
 		except ImportError as exc:
-			raise RuntimeError("TensorFlow backend requested, but TensorFlow is not installed. Install fextractor[tensorflow].") from exc
+			raise RuntimeError(
+				"TensorFlow backend requested, but TensorFlow is not installed. "
+				"Install fextractor[tensorflow]."
+			) from exc
 
-		self.model = load_model(self.model_path, compile=False)
-		if self.weights_path:
-			self.model.load_weights(self.weights_path)
+		return load_model(
+			self.model_path,
+			compile=False,
+		)
+
+	def _load_with_tf_keras(self):
+		"""Load model using legacy tf_keras."""
+		try:
+			import tf_keras
+		except ImportError as exc:
+			raise RuntimeError(
+				"Legacy Keras loader requested, but tf-keras is not installed. "
+				"Install fextractor[tensorflow]."
+			) from exc
+
+		return tf_keras.models.load_model(
+			self.model_path,
+			compile=False,
+		)
 
 	def prepare(self, source: str | Path) -> np.ndarray:
 		"""Read and prepare one model input batch."""
@@ -79,6 +129,7 @@ class TensorFlowFeatureExtractor(FeatureExtractor):
 			"weights": self.weights_path,
 			"imgsize": self.imgsize,
 			"in_chans": self.in_chans,
+			"keras_loader": self.keras_loader,
 			"preprocessing": self.preprocessing.__dict__.copy(),
 		})
 		return metadata
@@ -95,4 +146,5 @@ def create(config: ExtractorConfig) -> TensorFlowFeatureExtractor:
 		imgsize=config.imgsize if config.imgsize is not None else 224,
 		in_chans=config.in_chans if config.in_chans is not None else 1,
 		preprocessing=config.preprocessing,
+		keras_loader=config.get_option("keras_loader", "auto"),
 	)
