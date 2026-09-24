@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import json
-from pathlib import Path
 
+from .config import ExtractorConfig
+from .factory import create_extractor
 from .io import read_datalist, save_datalist_json, save_feature_vector
 from .preprocessing import ImagePreprocessConfig, get_profile, list_profiles
-from .registry import create_extractor, list_backends
+from .registry import list_backends
 from .runner import extract_datalist
 
 
@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _resolve_preprocessing(args) -> tuple[ImagePreprocessConfig, int | None, int | None]:
+	"""Resolve the current image preprocessing profile and CLI overrides."""
 	if args.profile:
 		profile = get_profile(args.profile)
 		base = profile.preprocessing
@@ -71,45 +72,33 @@ def _resolve_preprocessing(args) -> tuple[ImagePreprocessConfig, int | None, int
 
 	config_data = base.__dict__.copy()
 	config_data.update(changes)
-	return ImagePreprocessConfig(**config_data), args.imgsize or imgsize, args.in_chans or in_chans
+	preprocessing = ImagePreprocessConfig(**config_data)
+
+	if args.imgsize is not None:
+		imgsize = args.imgsize
+	if args.in_chans is not None:
+		in_chans = args.in_chans
+
+	return preprocessing, imgsize, in_chans
 
 
-def _create_from_args(args):
+def _config_from_args(args) -> ExtractorConfig:
+	"""Translate CLI arguments into a backend-neutral extractor configuration."""
 	preprocessing, imgsize, in_chans = _resolve_preprocessing(args)
 
-	if args.backend == "tensorflow":
-		if not args.model:
-			raise ValueError("--model is required for the TensorFlow backend")
-		return create_extractor(
-			"tensorflow",
-			model_path=args.model,
-			weights_path=args.model_weights,
-			imgsize=imgsize or 224,
-			in_chans=in_chans or 1,
-			preprocessing=preprocessing,
-		)
-
-	if args.backend == "dinov2":
-		return create_extractor(
-			"dinov2",
-			model_name=args.model or "dinov2_vits14",
-			device=args.device,
-			imgsize=imgsize or 224,
-			preprocessing=preprocessing,
-		)
-
-	if args.backend == "siglip":
-		return create_extractor(
-			"siglip",
-			model_name=args.model or "google/siglip-so400m-patch14-384",
-			device=args.device,
-			imgsize=imgsize,
-			reset_meanstd=args.reset_meanstd,
-			reset_rescale=args.reset_rescale,
-			preprocessing=preprocessing,
-		)
-
-	raise ValueError(f"Unsupported backend: {args.backend}")
+	return ExtractorConfig(
+		backend=args.backend,
+		model=args.model,
+		model_weights=args.model_weights,
+		device=args.device,
+		imgsize=imgsize,
+		in_chans=in_chans,
+		preprocessing=preprocessing,
+		options={
+			"reset_meanstd": args.reset_meanstd,
+			"reset_rescale": args.reset_rescale,
+		},
+	)
 
 
 def main(argv=None) -> int:
@@ -118,7 +107,9 @@ def main(argv=None) -> int:
 	args = parser.parse_args(argv)
 
 	try:
-		extractor = _create_from_args(args)
+		config = _config_from_args(args)
+		extractor = create_extractor(config)
+
 		if args.image:
 			features = extractor.extract(args.image)
 			save_feature_vector(features, args.outfile, metadata=extractor.metadata())
