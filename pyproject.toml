@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "GPL-3.0-or-later"}
 authors = [
-	{name = "SKA-INAF"}
+	{name = "Simone Riggi", email = "simone.riggi@inaf.it"}
 ]
 dependencies = [
 	"numpy>=1.22",
@@ -22,6 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 tensorflow = [
 	"tensorflow>=2.10"
+	"tf-keras>=2.10"
 ]
 dino = [
 	"torch>=2.0",
@@ -33,6 +34,7 @@ siglip = [
 ]
 all = [
 	"tensorflow>=2.10",
+	"tf-keras>=2.10",
 	"torch>=2.0",
 	"torchvision>=0.15",
 	"transformers>=4.40"
