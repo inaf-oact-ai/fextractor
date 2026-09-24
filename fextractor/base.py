@@ -35,21 +35,21 @@ class FeatureExtractor(ABC):
 		"""Extract one feature vector from one source."""
 
 	def ensure_loaded(self) -> None:
-	"""Load the model on first use."""
-	if not self._loaded:
-		logger.info(
-			"Loading extractor backend='%s' modality='%s'",
-			self.backend,
-			self.modality,
-		)
+		"""Load the model on first use."""
+		if not self._loaded:
+			logger.info(
+				"Loading extractor backend='%s' modality='%s'",
+				self.backend,
+				self.modality,
+			)
 
-		self.load_model()
-		self._loaded = True
+			self.load_model()
+			self._loaded = True
 
-		logger.info(
-			"Extractor backend='%s' loaded successfully",
-			self.backend,
-		)
+			logger.info(
+				"Extractor backend='%s' loaded successfully",
+				self.backend,
+			)
 
 	def extract_many(self, sources: Iterable[str | Path]) -> list[np.ndarray]:
 		"""Extract representations from several sources."""
