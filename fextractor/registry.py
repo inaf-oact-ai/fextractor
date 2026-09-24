@@ -33,11 +33,27 @@ _BACKEND_SPECS = (
 	BackendSpec(
 		name="dinov2",
 		modality="image",
-		class_path="fextractor.extractors.dino:DINOv2FeatureExtractor",
-		factory_path="fextractor.extractors.dino:create",
+		class_path="fextractor.extractors.dinov2:DINOv2FeatureExtractor",
+		factory_path="fextractor.extractors.dinov2:create",
 		aliases=("dino",),
-		default_model="dinov2_vits14",
+		default_model="facebook/dinov2-small",
 		dependency_group="dino",
+	),
+	BackendSpec(
+		name="dinov3",
+		modality="image",
+		class_path="fextractor.extractors.dinov3:DINOv3FeatureExtractor",
+		factory_path="fextractor.extractors.dinov3:create",
+		default_model="facebook/dinov3-vits16-pretrain-lvd1689m",
+		dependency_group="dino",
+	),
+	BackendSpec(
+		name="dinov2_legacy",
+		modality="image",
+		class_path="fextractor.extractors.dinov2_legacy:DINOv2LegacyFeatureExtractor",
+		factory_path="fextractor.extractors.dinov2_legacy:create",
+		default_model="dinov2_vits14",
+		dependency_group="dino-legacy",
 	),
 	BackendSpec(
 		name="siglip",
@@ -46,6 +62,14 @@ _BACKEND_SPECS = (
 		factory_path="fextractor.extractors.siglip:create",
 		default_model="google/siglip-so400m-patch14-384",
 		dependency_group="siglip",
+	),
+	BackendSpec(
+		name="siglip2",
+		modality="image",
+		class_path="fextractor.extractors.siglip2:SigLIP2FeatureExtractor",
+		factory_path="fextractor.extractors.siglip2:create",
+		default_model="google/siglip2-base-patch16-224",
+		dependency_group="siglip2",
 	),
 )
 
