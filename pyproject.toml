@@ -30,18 +30,36 @@ tensorflow-gpu = [
 ]
 dino = [
 	"torch>=2.0",
+	"transformers>=4.56"
+]
+
+dino-legacy = [
+	"torch>=2.0",
 	"torchvision>=0.15"
 ]
+
 siglip = [
 	"torch>=2.0",
 	"transformers>=4.40"
 ]
+
+siglip2 = [
+	"torch>=2.0",
+	"transformers>=4.56"
+]
+
+torch-all = [
+	"torch>=2.0",
+	"torchvision>=0.15",
+	"transformers>=4.56"
+]
+
 all = [
 	"tensorflow>=2.10",
 	"tf-keras>=2.10",
 	"torch>=2.0",
 	"torchvision>=0.15",
-	"transformers>=4.40"
+	"transformers>=4.56"
 ]
 test = [
 	"pytest>=7.0"
