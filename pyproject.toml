@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "GPL-3.0-or-later"}
 authors = [
-	{name = "Simone Riggi", email = "simone.riggi@inaf.it"}
+	{
+		name = "Simone Riggi", 
+		email = "simone.riggi@inaf.it"
+	}
 ]
 dependencies = [
 	"numpy>=1.22",
@@ -21,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tensorflow = [
-	"tensorflow>=2.10"
+	"tensorflow>=2.10",
 	"tf-keras>=2.10"
 ]
 dino = [
