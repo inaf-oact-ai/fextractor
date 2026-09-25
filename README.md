@@ -55,11 +55,11 @@ fextractor \
   --datalist-key data \
   --model encoder-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5 \
   --model-weights encoder_weights-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5 \
-  --profile radio_simclr \
+  --profile simclr_radio \
   --outfile featdata.json
 ```
 
-The `radio_simclr` profile records the tested preprocessing setup:
+The `simclr_radio` profile records the tested preprocessing setup:
 
 - image size: 224;
 - one input channel;
@@ -73,7 +73,7 @@ Python API:
 from fextractor.extractors import TensorFlowFeatureExtractor
 from fextractor.preprocessing import get_profile
 
-profile = get_profile("radio_simclr")
+profile = get_profile("simclr_radio")
 extractor = TensorFlowFeatureExtractor(
 	model_path="encoder-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5",
 	weights_path="encoder_weights-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5",
@@ -114,7 +114,7 @@ fextractor \
   --image source.fits \
   --model encoder.h5 \
   --model-weights encoder_weights.h5 \
-  --profile radio_simclr \
+  --profile simclr_radio \
   --outfile source_features.json
 ```
 

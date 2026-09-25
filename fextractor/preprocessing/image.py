@@ -42,8 +42,8 @@ class ImagePreprocessProfile:
 
 
 _PROFILES = {
-	"radio_simclr": ImagePreprocessProfile(
-		name="radio_simclr",
+	"simclr_radio": ImagePreprocessProfile(
+		name="simclr_radio",
 		preprocessing=ImagePreprocessConfig(
 			clip_data=False,
 			zscale=True,

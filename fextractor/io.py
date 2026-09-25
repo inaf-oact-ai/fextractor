@@ -9,6 +9,38 @@ from typing import Any
 
 DEFAULT_DATALIST_KEY = "data"
 
+IMAGE_EXTENSIONS = {
+	".fits",
+	".fit",
+	".fts",
+	".png",
+	".jpg",
+	".jpeg",
+	".tif",
+	".tiff",
+}
+
+
+def detect_input_type(filename: str | Path) -> str:
+	"""Detect whether an input file is an image or a JSON datalist."""
+	path = Path(filename)
+
+	name = path.name.lower()
+
+	if name.endswith(".json"):
+		return "datalist"
+
+	if name.endswith(".fits.gz"):
+		return "image"
+
+	if path.suffix.lower() in IMAGE_EXTENSIONS:
+		return "image"
+
+	raise ValueError(
+		f"Unsupported input file type '{filename}'. "
+		"Expected a JSON datalist or supported image file."
+	)
+
 
 def read_datalist(filename: str | Path, key: str = DEFAULT_DATALIST_KEY) -> list[dict[str, Any]]:
 	"""Read the standard JSON datalist format.

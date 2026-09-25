@@ -17,8 +17,8 @@ def test_constant_image_is_safe():
 	assert np.all(output == 0.0)
 
 
-def test_radio_simclr_profile():
-	profile = get_profile("radio_simclr")
+def test_simclr_radio_profile():
+	profile = get_profile("simclr_radio")
 	assert profile.imgsize == 224
 	assert profile.in_chans == 1
 	assert profile.preprocessing.zscale is True

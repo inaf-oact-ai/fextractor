@@ -8,7 +8,12 @@ import argparse
 
 from .config import ExtractorConfig
 from .factory import create_extractor
-from .io import read_datalist, save_datalist_json, save_feature_vector
+from .io import (
+	detect_input_type,
+	read_datalist,
+	save_datalist_json,
+	save_feature_vector,
+)
 from .logging_utils import configure_logging
 from .preprocessing import ImagePreprocessConfig, get_profile, list_profiles
 from .registry import list_backends
@@ -21,11 +26,13 @@ def build_parser() -> argparse.ArgumentParser:
 	parser = argparse.ArgumentParser(description="Extract features/representations from pretrained models.")
 	parser.add_argument("--backend", required=True, choices=list_backends())
 
-	inputs = parser.add_mutually_exclusive_group(required=True)
-	inputs.add_argument("--image", help="Single FITS/PNG/JPEG input image")
-	inputs.add_argument("--inputfile", help="Input datalist JSON")
+	parser.add_argument(
+		"--inputfile",
+		required=True,
+		help="Input image or JSON datalist",
+	)
 
-	parser.add_argument("--outfile", required=True, help="Output JSON file")
+	parser.add_argument("--outfile", default="fextractor_results.json", help="Output JSON file (default: fextractor_results.json)")
 	parser.add_argument("--datalist-key", default="data")
 	parser.add_argument("--nmax", type=int, default=-1)
 	parser.add_argument("--skip-errors", action="store_true")
@@ -131,22 +138,32 @@ def main(argv=None) -> int:
 	)
 
 	try:
+		# - Parse config & input type
 		config = _config_from_args(args)
+		input_type = detect_input_type(args.inputfile)
 
+		logger.info(
+			"Detected input type='%s' file='%s'",
+			input_type,
+			args.inputfile,
+		)
+
+		# - Create extractor
 		logger.info(
 			"Creating extractor backend='%s'",
 			config.backend,
 		)
-
+		
 		extractor = create_extractor(config)
 
-		if args.image:
+		# - Extract features
+		if input_type == "image":
 			logger.info(
 				"Extracting representation from image='%s'",
-				args.image,
+				args.inputfile,
 			)
 
-			features = extractor.extract(args.image)
+			features = extractor.extract(args.inputfile)
 
 			logger.info(
 				"Extracted representation with %d features",
@@ -159,7 +176,7 @@ def main(argv=None) -> int:
 				metadata=extractor.metadata(),
 			)
 
-		else:
+		elif input_type == "datalist":
 			logger.info(
 				"Reading datalist='%s' key='%s'",
 				args.inputfile,
@@ -188,6 +205,11 @@ def main(argv=None) -> int:
 				args.outfile,
 				key=args.datalist_key,
 				metadata=extractor.metadata(),
+			)
+
+		else:
+			raise RuntimeError(
+				f"Unsupported detected input type '{input_type}'"
 			)
 
 		elapsed = time.perf_counter() - start_time
