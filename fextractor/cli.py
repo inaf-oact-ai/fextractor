@@ -236,6 +236,16 @@ def _resolve_timeseries_preprocessing(
 			args.metadata_columns
 		)
 
+	if args.time_start_key is not None:
+		changes["time_start_key"] = (
+			args.time_start_key
+		)
+
+	if args.cadence_key is not None:
+		changes["cadence_key"] = (
+			args.cadence_key
+		)
+
 	config_data = base.__dict__.copy()
 	config_data.update(
 		changes
