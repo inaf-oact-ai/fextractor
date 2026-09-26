@@ -34,11 +34,10 @@ class ImagePreprocessConfig:
 @dataclass(frozen=True)
 class ImagePreprocessProfile:
 	"""Named combination of preprocessing and model-input defaults."""
-
 	name: str
 	preprocessing: ImagePreprocessConfig
-	imgsize: int
-	in_chans: int
+	imgsize: int | None = None
+	in_chans: int | None = None
 
 
 _PROFILES = {
@@ -55,11 +54,19 @@ _PROFILES = {
 		imgsize=224,
 		in_chans=1,
 	),
+
 	"default": ImagePreprocessProfile(
 		name="default",
-		preprocessing=ImagePreprocessConfig(),
-		imgsize=224,
-		in_chans=3,
+		preprocessing=ImagePreprocessConfig(
+			clip_data=False,
+			zscale=False,
+			zscale_contrast=0.25,
+			norm_min=0.0,
+			norm_max=1.0,
+			set_zero_to_min=False,
+		),
+		imgsize=None,
+		in_chans=None,
 	),
 }
 
