@@ -1,1 +1,7 @@
-"""Image-specific data and utility functions."""
+"""Image-specific I/O and utility functions."""
+
+from .io import read_image
+
+__all__ = [
+	"read_image",
+]

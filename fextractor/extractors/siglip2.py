@@ -12,8 +12,8 @@ from PIL import Image
 from ..base import FeatureExtractor
 from ..config import ExtractorConfig
 from ..image.utils import to_uint8_rgb
-from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, read_image
-
+from ..image.io import read_image
+from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing
 
 logger = logging.getLogger(__name__)
 
