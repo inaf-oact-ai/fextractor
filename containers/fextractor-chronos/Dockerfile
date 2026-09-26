@@ -1,8 +1,7 @@
 FROM pytorch/pytorch:2.14.0-cuda12.6-cudnn9-runtime
-###FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
 
-LABEL org.opencontainers.image.title="fextractor-torch" \
-      org.opencontainers.image.description="Runtime for fextractor applications using Torch/HF models" \
+LABEL org.opencontainers.image.title="fextractor-chronos" \
+      org.opencontainers.image.description="Runtime for fextractor Chronos time-series models" \
       org.opencontainers.image.source="https://github.com/inaf-oact-ai/fextractor" \
       org.opencontainers.image.authors="Simone Riggi"
 
@@ -97,7 +96,7 @@ RUN git pull origin ${FEXTRACTOR_REF}
 
 # - Install
 WORKDIR ${FEXTRACTOR_SRC_DIR}
-RUN python -m pip install -e "${FEXTRACTOR_SRC_DIR}[torch-all]"
+RUN python -m pip install -e "${FEXTRACTOR_SRC_DIR}[chronos]"
 
 ######################################
 ##     RUN
