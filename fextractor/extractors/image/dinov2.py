@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..config import ExtractorConfig
+from ...config import ExtractorConfig
 from .dino_common import HuggingFaceDINOFeatureExtractor
 
 

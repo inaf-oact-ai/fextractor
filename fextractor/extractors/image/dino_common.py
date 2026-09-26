@@ -1,4 +1,4 @@
-"""SigLIP2 representation extractor."""
+"""Shared Hugging Face DINO representation extractor."""
 
 from __future__ import annotations
 
@@ -9,25 +9,22 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from ..base import FeatureExtractor
-from ..config import ExtractorConfig
-from ..image.utils import to_uint8_rgb
-from ..image.io import read_image
-from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing
+from ...base import FeatureExtractor
+from ...image.utils import to_uint8_rgb
+from ...image.io import read_image
+from ...preprocessing import ImagePreprocessConfig, apply_image_preprocessing
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "google/siglip2-so400m-patch14-384"
 
-class SigLIP2FeatureExtractor(FeatureExtractor):
-	"""Extract image representations from Hugging Face SigLIP2 models."""
+class HuggingFaceDINOFeatureExtractor(FeatureExtractor):
+	"""Base extractor for Hugging Face DINO-family image backbones."""
 
-	backend = "siglip2"
 	modality = "image"
 
 	def __init__(
 		self,
-		model_name: str = DEFAULT_MODEL,
+		model_name: str,
 		device: str = "cuda",
 		preprocessing: ImagePreprocessConfig | None = None,
 	) -> None:
@@ -41,27 +38,29 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 		self.torch = None
 
 	def load_model(self) -> None:
-		"""Load the SigLIP2 model and Hugging Face processor."""
+		"""Load the Hugging Face DINO model and image processor."""
 		try:
 			import torch
-			from transformers import AutoModel, AutoProcessor
+			from transformers import AutoImageProcessor, AutoModel
 		except ImportError as exc:
 			raise RuntimeError(
-				"SigLIP2 backend requested, but PyTorch/Transformers are not installed. "
-				"Install fextractor[siglip2]."
+				f"{self.backend} backend requested, but PyTorch/Transformers are not installed. "
+				"Install the appropriate fextractor DINO dependency group."
 			) from exc
 
 		self.torch = torch
 
 		logger.info(
-			"Loading SigLIP2 model='%s' requested_device='%s'",
+			"Loading %s model='%s' requested_device='%s'",
+			self.backend,
 			self.model_name,
 			self.requested_device,
 		)
 
 		if "cuda" in self.device and not torch.cuda.is_available():
 			logger.warning(
-				"CUDA requested for SigLIP2 but no CUDA device is available; falling back to CPU"
+				"CUDA requested for %s but no CUDA device is available; falling back to CPU",
+				self.backend,
 			)
 			self.device = "cpu"
 
@@ -74,18 +73,19 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 		else:
 			logger.info("Using device='%s'", self.device)
 
+		self.processor = AutoImageProcessor.from_pretrained(
+			self.model_name,
+		)
+
 		self.model = AutoModel.from_pretrained(
 			self.model_name,
 		).to(self.device)
 
 		self.model.eval()
 
-		self.processor = AutoProcessor.from_pretrained(
-			self.model_name,
-		)
-
 		logger.info(
-			"SigLIP2 model loaded successfully: model='%s' device='%s'",
+			"%s model loaded successfully: model='%s' device='%s'",
+			self.backend,
 			self.model_name,
 			self.device,
 		)
@@ -98,11 +98,12 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 		return Image.fromarray(data, mode="RGB")
 
 	def extract(self, source: str | Path) -> np.ndarray:
-		"""Return one SigLIP2 image representation vector."""
+		"""Return one pooled DINO image representation vector."""
 		self.ensure_loaded()
 
 		logger.debug(
-			"Extracting SigLIP2 representation from '%s'",
+			"Extracting %s representation from '%s'",
+			self.backend,
 			source,
 		)
 
@@ -114,18 +115,21 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 		).to(self.device)
 
 		logger.debug(
-			"SigLIP2 processor output keys=%s device='%s'",
+			"%s processor output keys=%s device='%s'",
+			self.backend,
 			tuple(inputs.keys()),
 			self.device,
 		)
 
 		with self.torch.inference_mode():
-			features = self.model.get_image_features(**inputs)
+			outputs = self.model(**inputs)
 
-		if hasattr(features, "pooler_output"):
-			features = features.pooler_output
+		if not hasattr(outputs, "pooler_output") or outputs.pooler_output is None:
+			raise RuntimeError(
+				f"{self.backend} model '{self.model_name}' did not return pooler_output"
+			)
 
-		features = features.detach().cpu().numpy()
+		features = outputs.pooler_output.detach().cpu().numpy()
 
 		if features.ndim > 1 and features.shape[0] == 1:
 			features = features[0]
@@ -136,7 +140,8 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 		).reshape(-1)
 
 		logger.debug(
-			"SigLIP2 representation extracted: features=%d",
+			"%s representation extracted: features=%d",
+			self.backend,
 			features.size,
 		)
 
@@ -150,16 +155,8 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 			"model": self.model_name,
 			"requested_device": self.requested_device,
 			"device": self.device,
+			"feature_type": "pooler_output",
 			"preprocessing": self.preprocessing.__dict__.copy(),
 		})
 
 		return metadata
-
-
-def create(config: ExtractorConfig) -> SigLIP2FeatureExtractor:
-	"""Create a SigLIP2 extractor from a backend-neutral configuration."""
-	return SigLIP2FeatureExtractor(
-		model_name=config.model or DEFAULT_MODEL,
-		device=config.device,
-		preprocessing=config.preprocessing,
-	)

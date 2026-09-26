@@ -1,13 +1,10 @@
-"""Scientific image decoding and domain preprocessing."""
+"""Scientific image domain preprocessing."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from pathlib import Path
 
 import numpy as np
-from PIL import Image
-from astropy.io import fits
 from astropy.stats import sigma_clip
 from astropy.visualization import ZScaleInterval
 
@@ -82,30 +79,6 @@ def get_profile(name: str) -> ImagePreprocessProfile:
 		return _PROFILES[name]
 	except KeyError as exc:
 		raise KeyError(f"Unknown preprocessing profile '{name}'. Available: {', '.join(list_profiles())}") from exc
-
-
-def read_image(filename: str | Path) -> np.ndarray:
-	"""Read FITS, PNG, or JPEG data into a NumPy array."""
-	path = Path(filename)
-	ext = path.suffix.lower()
-
-	if ext in {".fits", ".fit", ".fts"}:
-		with fits.open(path, memmap=False) as hdul:
-			data = np.asarray(hdul[0].data)
-	elif ext in {".png", ".jpg", ".jpeg"}:
-		with Image.open(path) as image:
-			data = np.asarray(image)
-	else:
-		raise ValueError(f"Unsupported image extension '{ext}' for '{path}'")
-
-	if data is None or data.size == 0:
-		raise ValueError(f"No image data found in '{path}'")
-
-	data = np.squeeze(data)
-	if data.ndim not in (2, 3):
-		raise ValueError(f"Expected a 2D or 3D image in '{path}', got shape {data.shape}")
-
-	return data
 
 
 def _replace_invalid(data: np.ndarray, set_zero_to_min: bool) -> np.ndarray:

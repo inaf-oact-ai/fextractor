@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from ..base import FeatureExtractor
-from ..config import ExtractorConfig
-from ..image.utils import ensure_channels, to_uint8_rgb
-from ..image.io import read_image
-from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing
+from ...base import FeatureExtractor
+from ...config import ExtractorConfig
+from ...image.utils import ensure_channels, to_uint8_rgb
+from ...image.io import read_image
+from ...preprocessing import ImagePreprocessConfig, apply_image_preprocessing
 
 logger = logging.getLogger(__name__)
 

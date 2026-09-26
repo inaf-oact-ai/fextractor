@@ -6,7 +6,6 @@ from .image import (
 	apply_image_preprocessing,
 	get_profile,
 	list_profiles,
-	read_image,
 )
 
 __all__ = [
@@ -15,5 +14,4 @@ __all__ = [
 	"apply_image_preprocessing",
 	"get_profile",
 	"list_profiles",
-	"read_image",
 ]
