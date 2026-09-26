@@ -11,6 +11,12 @@ from .regularization import (
 	regularize_timeseries,
 )
 
+from .aggregation import (
+	SUPPORTED_AGGREGATIONS,
+	TokenRepresentation,
+	aggregate_token_representation,
+)
+
 __all__ = [
 	"SUPPORTED_TIMESERIES_EXTENSIONS",
 	"TimeSeries",
@@ -18,4 +24,7 @@ __all__ = [
 	"is_regular_timeseries",
 	"read_timeseries",
 	"regularize_timeseries",
+	"SUPPORTED_AGGREGATIONS",
+	"TokenRepresentation",
+	"aggregate_token_representation",
 ]
