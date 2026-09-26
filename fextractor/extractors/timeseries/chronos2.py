@@ -92,7 +92,7 @@ class Chronos2FeatureExtractor(
 		self.pipeline = Chronos2Pipeline.from_pretrained(
 			self.model_name,
 			device_map=self.device,
-			torch_dtype=torch.float32,
+			dtype=torch.float32,
 		)
 
 		logger.info(
