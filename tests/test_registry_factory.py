@@ -6,9 +6,17 @@ from fextractor.registry import get_backend_spec, list_backends
 
 
 def test_list_backends():
-	assert list_backends() == ("tensorflow", "dinov2", "siglip")
-	assert list_backends(modality="image") == ("tensorflow", "dinov2", "siglip")
+	expected = (
+		"tensorflow",
+		"dinov2",
+		"dinov3",
+		"dinov2_legacy",
+		"siglip",
+		"siglip2",
+	)
 
+	assert list_backends() == expected
+	assert list_backends(modality="image") == expected
 
 def test_backend_alias():
 	spec = get_backend_spec("tf")
