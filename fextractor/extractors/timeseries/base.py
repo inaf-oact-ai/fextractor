@@ -16,6 +16,8 @@ from ...timeseries import (
 	TimeSeries,
 	read_timeseries,
 )
+from ...timeseries.data import TimeSeries
+
 from ...timeseries.aggregation import (
 	TokenRepresentation,
 	aggregate_token_representation,
@@ -44,12 +46,22 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 	) -> TimeSeries:
 		"""Read and domain-preprocess one time series."""
 
-		series = read_timeseries(
-			source,
-			time_column=self.preprocessing.time_column,
-			value_columns=self.preprocessing.value_columns,
-			error_columns=self.preprocessing.error_columns,
-		)
+
+		if isinstance(source, TimeSeries):
+			series = source.copy()
+			
+		else:
+			series = read_timeseries(
+				source,
+				time_column=self.preprocessing.time_column,
+				value_columns=self.preprocessing.value_columns,
+				error_columns=self.preprocessing.error_columns,
+				layout=self.preprocessing.layout,
+				value_prefixes=self.preprocessing.value_prefixes,
+				channel_names=self.preprocessing.channel_names,
+				label_column=self.preprocessing.label_column,
+				metadata_columns=self.preprocessing.metadata_columns,
+			)
 
 		return apply_timeseries_preprocessing(
 			series,

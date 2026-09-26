@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from fextractor.timeseries import read_timeseries
+from fextractor.timeseries.io import (
+	read_timeseries,
+	read_timeseries_record,
+)
 
 
 def test_read_npy_timeseries(
@@ -177,5 +180,182 @@ def test_error_columns_must_match_values(
 			),
 			error_columns=(
 				"g_err",
+			),
+		)
+	
+def test_read_wide_timeseries(
+	tmp_path,
+):
+	path = tmp_path / "wide.csv"
+
+	path.write_text(
+		"t0,r1,r2,r3,h1,h2,h3,label\n"
+		"2026-01-01 00:00:00,"
+		"1.0,2.0,3.0,"
+		"0,1,1,"
+		"X\n",
+		encoding="utf-8",
+	)
+
+	series = read_timeseries(
+		path,
+		layout="wide",
+		time_column="t0",
+		value_prefixes=(
+			"r",
+			"h",
+		),
+		channel_names=(
+			"flux_ratio",
+			"flare_history",
+		),
+		label_column="label",
+	)
+
+	assert series.values.shape == (
+		3,
+		2,
+	)
+
+	assert series.channel_names == (
+		"flux_ratio",
+		"flare_history",
+	)
+
+	np.testing.assert_allclose(
+		series.values[:, 0],
+		[
+			1.0,
+			2.0,
+			3.0,
+		],
+	)
+
+	np.testing.assert_allclose(
+		series.values[:, 1],
+		[
+			0.0,
+			1.0,
+			1.0,
+		],
+	)
+
+	assert series.metadata[
+		"time_origin"
+	] == "2026-01-01 00:00:00"
+
+	assert series.metadata[
+		"label"
+	] == "X"
+	
+	
+def test_wide_channels_must_have_same_length(
+	tmp_path,
+):
+	path = tmp_path / "wide.csv"
+
+	path.write_text(
+		"r1,r2,r3,h1,h2\n"
+		"1,2,3,0,1\n",
+		encoding="utf-8",
+	)
+
+	with pytest.raises(
+		ValueError,
+		match="different lengths",
+	):
+		read_timeseries(
+			path,
+			layout="wide",
+			value_prefixes=(
+				"r",
+				"h",
+			),
+		)
+		
+		
+def test_read_timeseries_record():
+	record = {
+		"satellite": "goes08",
+		"label": "X",
+		"n_points": 3,
+		"t_start": 1000.0,
+		"dt": 60.0,
+		"flux": [
+			1.0,
+			2.0,
+			3.0,
+		],
+		"history": [
+			0.0,
+			1.0,
+			1.0,
+		],
+	}
+
+	series = read_timeseries_record(
+		record,
+		value_keys=(
+			"flux",
+			"history",
+		),
+		channel_names=(
+			"flux_ratio",
+			"flare_history",
+		),
+		time_start_key="t_start",
+		cadence_key="dt",
+	)
+
+	assert series.values.shape == (
+		3,
+		2,
+	)
+
+	assert series.channel_names == (
+		"flux_ratio",
+		"flare_history",
+	)
+
+	np.testing.assert_allclose(
+		series.times,
+		[
+			1000.0,
+			1060.0,
+			1120.0,
+		],
+	)
+
+	assert series.metadata[
+		"label"
+	] == "X"
+
+	assert series.metadata[
+		"satellite"
+	] == "goes08"
+	
+	
+def test_read_timeseries_record_rejects_different_lengths():
+	record = {
+		"a": [
+			1.0,
+			2.0,
+			3.0,
+		],
+		"b": [
+			4.0,
+			5.0,
+		],
+	}
+
+	with pytest.raises(
+		ValueError,
+		match="different lengths",
+	):
+		read_timeseries_record(
+			record,
+			value_keys=(
+				"a",
+				"b",
 			),
 		)

@@ -81,6 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--context-length", type=int, default=None, help="Optional backend context length")
 	parser.add_argument("--batch-size", type=int, default=None, help="Backend embedding batch size")
 	
+	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
+	parser.add_argument("--value-prefixes", nargs="+", default=None, help="Wide-layout time-series column prefixes")
+	parser.add_argument("--channel-names", nargs="+", default=None, help="Wide-layout channel names")
+	parser.add_argument("--label-column", default=None, help="Optional sample-level label column")
+	parser.add_argument("--metadata-columns", nargs="+", default=None, help="Additional sample-level metadata columns")
+	
+	parser.add_argument("--time-start-key", default=None, help="Inline JSON field containing the start timestamp")
+	parser.add_argument("--cadence-key", default=None, help="Inline JSON field containing the sampling cadence")
+	
 	# == RUN OPTIONS ==
 	parser.add_argument("--skip-errors", action="store_true")
 	parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO", help="Logging level (default=INFO)")
@@ -200,6 +209,31 @@ def _resolve_timeseries_preprocessing(
 	if args.missing_strategy is not None:
 		changes["missing_strategy"] = (
 			args.missing_strategy
+		)
+		
+	if args.timeseries_layout is not None:
+		changes["layout"] = (
+			args.timeseries_layout
+		)
+
+	if args.value_prefixes is not None:
+		changes["value_prefixes"] = tuple(
+			args.value_prefixes
+		)
+
+	if args.channel_names is not None:
+		changes["channel_names"] = tuple(
+			args.channel_names
+		)
+
+	if args.label_column is not None:
+		changes["label_column"] = (
+			args.label_column
+		)
+
+	if args.metadata_columns is not None:
+		changes["metadata_columns"] = tuple(
+			args.metadata_columns
 		)
 
 	config_data = base.__dict__.copy()

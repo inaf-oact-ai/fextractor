@@ -16,15 +16,26 @@ from ..timeseries import (
 class TimeSeriesPreprocessConfig:
 	"""Domain-level time-series preprocessing options."""
 
+	layout: str = "long"
+	
 	time_column: str | None = None
 	value_columns: tuple[str, ...] | None = None
 	error_columns: tuple[str, ...] | None = None
 
+	value_prefixes: tuple[str, ...] | None = None
+	channel_names: tuple[str, ...] | None = None
+	
+	label_column: str | None = None
+	metadata_columns: tuple[str, ...] | None = None
+	
 	sort_time: bool = True
 
 	regularize: bool = False
 	cadence: float | None = None
 	missing_strategy: str = "nan"
+	
+	time_start_key: str | None = None
+	cadence_key: str | None = None
 
 
 @dataclass(frozen=True)

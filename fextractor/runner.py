@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from .base import FeatureExtractor
-
+from .extractors.timeseries.base import TimeSeriesFeatureExtractor
+from .timeseries.io import read_timeseries_record
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,95 @@ logger = logging.getLogger(__name__)
 class ExtractionError(RuntimeError):
 	"""Error raised when a datalist entry cannot be processed."""
 
+def _get_entry_source(
+	item: dict[str, Any],
+	extractor: FeatureExtractor,
+	filepath_index: int = 0,
+):
+	"""Resolve the extraction source for one datalist entry."""
+
+	if (
+		"filepath" in item
+		or "filepaths" in item
+	):
+		return _get_entry_filepath(
+			item,
+			filepath_index=filepath_index,
+		)
+
+	if isinstance(
+		extractor,
+		TimeSeriesFeatureExtractor,
+	):
+		preprocessing = extractor.preprocessing
+
+		if preprocessing.value_columns is None:
+			raise ValueError(
+				"Inline time-series records require value_columns"
+			)
+
+		return read_timeseries_record(
+			record=item,
+			value_keys=preprocessing.value_columns,
+			channel_names=preprocessing.channel_names,
+			time_key=preprocessing.time_column,
+			time_start_key=preprocessing.time_start_key,
+			cadence_key=preprocessing.cadence_key,
+		)
+
+	raise KeyError(
+		"Datalist entry must contain 'filepath' or 'filepaths'"
+	)
+	
+def _get_entry_filepath(
+	item: dict[str, Any],
+	filepath_index: int = 0,
+) -> Path:
+	"""Resolve a source filepath from a datalist entry."""
+
+	if "filepath" in item:
+		return Path(
+			item["filepath"]
+		)
+
+	if "filepaths" in item:
+		filepaths = item[
+			"filepaths"
+		]
+
+		if not isinstance(
+			filepaths,
+			(
+				list,
+				tuple,
+			),
+		):
+			raise TypeError(
+				"'filepaths' must be a list or tuple"
+			)
+
+		if not filepaths:
+			raise ValueError(
+				"'filepaths' cannot be empty"
+			)
+
+		try:
+			return Path(
+				filepaths[
+					filepath_index
+				]
+			)
+
+		except IndexError as exc:
+			raise IndexError(
+				f"filepath_index={filepath_index} is out of range "
+				f"for {len(filepaths)} filepaths"
+			) from exc
+
+	raise KeyError(
+		"Datalist entry must contain either "
+		"'filepath' or 'filepaths'"
+	)
 
 def extract_datalist(
 	datalist: list[dict[str, Any]],
@@ -28,7 +118,12 @@ def extract_datalist(
 	copy_data: bool = False,
 	skip_errors: bool = False,
 ) -> list[dict[str, Any]]:
-	"""Extract features for the standard ``filepaths`` datalist format."""
+	"""
+		Extract features from filepath-based datalist entries.
+		Entries may contain either ``filepath`` for a single source or
+		``filepaths`` for multiple associated sources.
+	"""
+
 	output = deepcopy(datalist) if copy_data else datalist
 
 	total_entries = len(output)
@@ -54,16 +149,16 @@ def extract_datalist(
 			break
 
 		try:
-			filepaths = item["filepaths"]
-			filename = Path(filepaths[filepath_index])
-
-			logger.debug(
-				"Processing entry=%d file='%s'",
-				index,
-				filename,
+			logger.debug("Processing datalist entry=%d", index)
+			
+			source = _get_entry_source(
+				item,
+				extractor,
+				filepath_index=filepath_index,
 			)
 
-			features = extractor.extract(filename)
+			features = extractor.extract(source)
+
 			item[feature_key] = [float(value) for value in features]
 
 			processed += 1
