@@ -54,7 +54,7 @@ if [ "$NARGS" -lt 1 ]; then
 	echo ""
 	
 	echo "=== FEXTRACTOR RUN OPTIONS ==="
-	echo "--device=[DEVICE] - Inference device. Default: cuda"
+	##echo "--device=[DEVICE] - Inference device. Default: cuda" ## INEFFECTIVE ON TF BRANCH, SO COMMENT
 	echo "--skip-errors - Skip failed datalist entries instead of aborting the run"
 	echo ""
 	
@@ -93,7 +93,7 @@ NMAX=""
 
 # - Run options passed to fextractor
 SKIP_ERRORS_OPT=""
-DEVICE="cuda"
+###DEVICE="cuda"  ## INEFFECTIVE ON TF BRANCH, SO COMMENT
 
 # - Model options
 MODEL="simclr_radio"
@@ -183,9 +183,9 @@ do
     ;;
 	
 		# - FEXTRACTOR RUN OPTIONS
-		--device=*)
-			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
-		;;
+##		--device=*)
+##			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
+##		;;
 
 		--skip-errors)
 			SKIP_ERRORS_OPT="--skip-errors"
@@ -294,7 +294,8 @@ else
 
 fi
 
-FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
+##FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
+FEXTRACTOR_RUN_OPTS="$SKIP_ERRORS_OPT "
 
 RUN_OPTS="--backend=$BACKEND $FEXTRACTOR_RUN_OPTS "
 
