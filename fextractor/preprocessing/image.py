@@ -16,9 +16,9 @@ from astropy.visualization import ZScaleInterval
 class ImagePreprocessConfig:
 	"""Domain-level image preprocessing options.
 
-	Model-specific resize and normalization are intentionally handled by each
-	extractor backend. This configuration contains only transformations that
-	belong to the scientific input data itself.
+	Model-specific resize, channel handling, and model-native normalization are
+	handled by each extractor backend. This configuration contains scientific
+	input transformations applied before model-specific preprocessing.
 	"""
 
 	clip_data: bool = False
