@@ -15,63 +15,107 @@ from .io import (
 	save_feature_vector,
 )
 from .logging_utils import configure_logging
-from .preprocessing import ImagePreprocessConfig, get_profile, list_profiles
-from .registry import list_backends
 from .runner import extract_datalist
 
+from .preprocessing import (
+	ImagePreprocessConfig,
+	TimeSeriesPreprocessConfig,
+	get_profile,
+	#list_profiles,
+)
+from .registry import (
+	get_backend_spec,
+	list_backends,
+)
+from .timeseries import SUPPORTED_AGGREGATIONS
+
 logger = logging.getLogger(__name__)
+
+
+##########################################
+###       OPTION PARSER
+##########################################		
 
 def build_parser() -> argparse.ArgumentParser:
 	"""Build the command-line parser."""
 	parser = argparse.ArgumentParser(description="Extract features/representations from pretrained models.")
+
+	# == MANDATORY OPTIONS ==
 	parser.add_argument("--backend", required=True, choices=list_backends())
+	parser.add_argument("--inputfile", required=True, help="Input image or JSON datalist")
 
-	parser.add_argument(
-		"--inputfile",
-		required=True,
-		help="Input image or JSON datalist",
-	)
-
-	parser.add_argument("--outfile", default="fextractor_results.json", help="Output JSON file (default: fextractor_results.json)")
+	# == INPUT DATA OPTIONS ==
 	parser.add_argument("--datalist-key", default="data")
 	parser.add_argument("--nmax", type=int, default=-1)
-	parser.add_argument("--skip-errors", action="store_true")
-	parser.add_argument("--profile", choices=list_profiles())
-	parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO", help="Logging level (default=INFO)")
-
+	##parser.add_argument("--profile", choices=list_profiles())
+	parser.add_argument("--profile", default="default", help="Domain preprocessing profile")
+	
+	# == OUTPUT DATA/SAVE OPTIONS ==
+	parser.add_argument("--outfile", default="fextractor_results.json", help="Output JSON file (default: fextractor_results.json)")
+	
+	# == MODEL OPTIONS ==
 	parser.add_argument("--model", help="Model file/path/name, depending on backend")
 	parser.add_argument("--model-weights", help="Optional TensorFlow weights file")
 	parser.add_argument("--keras-loader", choices=("auto", "keras", "tf_keras"), default="auto", help="TensorFlow: model loader to use (default=auto)")
 	
-	parser.add_argument("--device", default="cuda")
+	# == IMAGE OPTIONS ==
 	parser.add_argument("--imgsize", type=int)
 	parser.add_argument("--in-chans", type=int)
-
 	parser.add_argument("--clip-data", action=argparse.BooleanOptionalAction, default=None)
 	parser.add_argument("--zscale", action=argparse.BooleanOptionalAction, default=None)
 	parser.add_argument("--zscale-contrast", type=float)
 	parser.add_argument("--norm-min", type=float)
 	parser.add_argument("--norm-max", type=float)
 	parser.add_argument("--set-zero-to-min", action=argparse.BooleanOptionalAction, default=None)
-
 	parser.add_argument("--reset-meanstd", action="store_true", help="SigLIP: reset processor mean/std")
 	parser.add_argument("--reset-rescale", action="store_true", help="SigLIP: disable processor rescaling")
+	
+	# == TIME-SERIES OPTIONS ==
+	parser.add_argument("--time-column", default=None, help="Time-series timestamp column")
+	parser.add_argument("--value-columns", nargs="+", default=None, help="Time-series value column(s)")
+	parser.add_argument("--error-columns", nargs="+", default=None, help="Time-series uncertainty column(s)")
+	parser.add_argument("--regularize", action=argparse.BooleanOptionalAction, default=None, help="Regularize timestamps onto a fixed grid")
+	parser.add_argument("--cadence", type=float, default=None, help="Regularization cadence in timestamp units")
+	parser.add_argument("--missing-strategy", choices=("nan", "linear"), default=None, help="Missing-value treatment after regularization")
+	parser.add_argument("--aggregation", choices=SUPPORTED_AGGREGATIONS, default=None, help="Token aggregation strategy")
+	parser.add_argument("--context-length", type=int, default=None, help="Optional backend context length")
+	parser.add_argument("--batch-size", type=int, default=None, help="Backend embedding batch size")
+	
+	# == RUN OPTIONS ==
+	parser.add_argument("--skip-errors", action="store_true")
+	parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO", help="Logging level (default=INFO)")
+	parser.add_argument("--device", default="cuda")
+	
 	return parser
 
 
-def _resolve_preprocessing(args) -> tuple[ImagePreprocessConfig, int | None, int | None]:
-	"""Resolve the current image preprocessing profile and CLI overrides."""
+
+##########################################
+###       PROCESSOR CONFIG
+##########################################
+
+def _resolve_image_preprocessing(
+	args,
+) -> tuple[ImagePreprocessConfig, int | None, int | None]:
+	"""Resolve image preprocessing profile and CLI overrides."""
+
 	if args.profile:
-		profile = get_profile(args.profile)
+		profile = get_profile(
+			args.profile,
+			modality="image",
+		)
+
 		base = profile.preprocessing
 		imgsize = profile.imgsize
 		in_chans = profile.in_chans
+
 	else:
 		base = ImagePreprocessConfig()
 		imgsize = None
 		in_chans = None
 
 	changes = {}
+
 	for field_name, arg_name in (
 		("clip_data", "clip_data"),
 		("zscale", "zscale"),
@@ -80,25 +124,147 @@ def _resolve_preprocessing(args) -> tuple[ImagePreprocessConfig, int | None, int
 		("norm_max", "norm_max"),
 		("set_zero_to_min", "set_zero_to_min"),
 	):
-		value = getattr(args, arg_name)
+		value = getattr(
+			args,
+			arg_name,
+		)
+
 		if value is not None:
 			changes[field_name] = value
 
 	config_data = base.__dict__.copy()
-	config_data.update(changes)
-	preprocessing = ImagePreprocessConfig(**config_data)
+	config_data.update(
+		changes
+	)
+
+	preprocessing = ImagePreprocessConfig(
+		**config_data
+	)
 
 	if args.imgsize is not None:
 		imgsize = args.imgsize
+
 	if args.in_chans is not None:
 		in_chans = args.in_chans
 
-	return preprocessing, imgsize, in_chans
+	return (
+		preprocessing,
+		imgsize,
+		in_chans,
+	)
 
 
-def _config_from_args(args) -> ExtractorConfig:
-	"""Translate CLI arguments into a backend-neutral extractor configuration."""
-	preprocessing, imgsize, in_chans = _resolve_preprocessing(args)
+def _resolve_timeseries_preprocessing(
+	args,
+) -> TimeSeriesPreprocessConfig:
+	"""Resolve time-series preprocessing profile and CLI overrides."""
+
+	if args.profile:
+		profile = get_profile(
+			args.profile,
+			modality="timeseries",
+		)
+
+		base = profile.preprocessing
+
+	else:
+		base = TimeSeriesPreprocessConfig()
+
+	changes = {}
+
+	if args.time_column is not None:
+		changes["time_column"] = (
+			args.time_column
+		)
+
+	if args.value_columns is not None:
+		changes["value_columns"] = tuple(
+			args.value_columns
+		)
+
+	if args.error_columns is not None:
+		changes["error_columns"] = tuple(
+			args.error_columns
+		)
+
+	if args.regularize is not None:
+		changes["regularize"] = (
+			args.regularize
+		)
+
+	if args.cadence is not None:
+		changes["cadence"] = (
+			args.cadence
+		)
+
+	if args.missing_strategy is not None:
+		changes["missing_strategy"] = (
+			args.missing_strategy
+		)
+
+	config_data = base.__dict__.copy()
+	config_data.update(
+		changes
+	)
+
+	return TimeSeriesPreprocessConfig(
+		**config_data
+	)
+
+def _config_from_args(
+	args,
+) -> ExtractorConfig:
+	"""Translate CLI arguments into backend-neutral configuration."""
+
+	spec = get_backend_spec(
+		args.backend
+	)
+
+	imgsize = None
+	in_chans = None
+
+	if spec.modality == "image":
+		(
+			preprocessing,
+			imgsize,
+			in_chans,
+		) = _resolve_image_preprocessing(
+			args
+		)
+
+	elif spec.modality == "timeseries":
+		preprocessing = (
+			_resolve_timeseries_preprocessing(
+				args
+			)
+		)
+
+	else:
+		raise ValueError(
+			f"Unsupported backend modality '{spec.modality}' "
+			f"for backend '{spec.name}'"
+		)
+
+	options = {
+		"keras_loader": args.keras_loader,
+		"reset_meanstd": args.reset_meanstd,
+		"reset_rescale": args.reset_rescale,
+	}
+
+	if args.aggregation is not None:
+		options["aggregation"] = (
+			args.aggregation
+		)
+
+	if args.context_length is not None:
+		options["context_length"] = (
+			args.context_length
+		)
+
+	if args.batch_size is not None:
+		options["batch_size"] = (
+			args.batch_size
+		)
 
 	return ExtractorConfig(
 		backend=args.backend,
@@ -108,20 +274,24 @@ def _config_from_args(args) -> ExtractorConfig:
 		imgsize=imgsize,
 		in_chans=in_chans,
 		preprocessing=preprocessing,
-		options={
-			"keras_loader": args.keras_loader,
-			"reset_meanstd": args.reset_meanstd,
-			"reset_rescale": args.reset_rescale,
-		},
+		options=options,
 	)
+	
+##########################################
+###       MAIN
+##########################################		
 
 def main(argv=None) -> int:
 	"""CLI entry point."""
+	
+	# - Parse options
 	parser = build_parser()
 	args = parser.parse_args(argv)
 
+	# - Configure logging
 	configure_logging(args.log_level)
 
+	# - Run feat extraction
 	start_time = time.perf_counter()
 
 	logger.info("Starting fextractor")
@@ -138,13 +308,26 @@ def main(argv=None) -> int:
 	)
 
 	try:
-		# - Parse config & input type
-		config = _config_from_args(args)
-		input_type = detect_input_type(args.inputfile)
+	
+		# - Parse config and backend specification
+		config = _config_from_args(
+			args
+		)
+
+		spec = get_backend_spec(
+			config.backend
+		)
+
+		# - Detect input type using backend modality
+		input_type = detect_input_type(
+			args.inputfile,
+			modality=spec.modality,
+		)
 
 		logger.info(
-			"Detected input type='%s' file='%s'",
+			"Detected input type='%s' modality='%s' file='%s'",
 			input_type,
+			spec.modality,
 			args.inputfile,
 		)
 
@@ -153,26 +336,32 @@ def main(argv=None) -> int:
 			"Creating extractor backend='%s'",
 			config.backend,
 		)
-		
-		extractor = create_extractor(config)
-		
-		spec = get_backend_spec(args.backend)
-		modality = get_backend_modality(args.backend)
 
+		extractor = create_extractor(
+			config
+		)
+	
 		# - Extract features
-		if input_type == "image":
+		if input_type in (
+			"image",
+			"timeseries",
+		):
 			logger.info(
-				"Extracting representation from image='%s'",
+				"Extracting representation from %s='%s'",
+				input_type,
 				args.inputfile,
 			)
 
-			features = extractor.extract(args.inputfile)
+			features = extractor.extract(
+				args.inputfile
+			)
 
 			logger.info(
 				"Extracted representation with %d features",
 				len(features),
 			)
 
+			# - Save features
 			save_feature_vector(
 				features,
 				args.outfile,
@@ -203,6 +392,7 @@ def main(argv=None) -> int:
 				skip_errors=args.skip_errors,
 			)
 
+			# - Save features
 			save_datalist_json(
 				datalist,
 				args.outfile,

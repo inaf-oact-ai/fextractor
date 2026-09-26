@@ -7,29 +7,52 @@ from pathlib import Path
 from typing import Any
 
 from .image.io import SUPPORTED_IMAGE_EXTENSIONS
+from .timeseries.io import SUPPORTED_TIMESERIES_EXTENSIONS
+
 
 DEFAULT_DATALIST_KEY = "data"
 
 
-def detect_input_type(filename: str | Path) -> str:
-	"""Detect whether an input file is an image or a JSON datalist."""
+def detect_input_type(
+	filename: str | Path,
+	modality: str | None = None,
+) -> str:
+	"""Detect the high-level input type."""
+
 	path = Path(filename)
-
 	name = path.name.lower()
+	ext = path.suffix.lower()
 
-	if name.endswith(".json"):
+	if ext == ".json":
 		return "datalist"
+
+	if modality == "timeseries":
+		if name.endswith(".fits.gz"):
+			return "timeseries"
+
+		if ext in SUPPORTED_TIMESERIES_EXTENSIONS:
+			return "timeseries"
+
+	if modality == "image":
+		if name.endswith(".fits.gz"):
+			return "image"
+
+		if ext in SUPPORTED_IMAGE_EXTENSIONS:
+			return "image"
 
 	if name.endswith(".fits.gz"):
 		return "image"
 
-	if path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS:
+	if ext in SUPPORTED_IMAGE_EXTENSIONS:
 		return "image"
 
+	if ext in SUPPORTED_TIMESERIES_EXTENSIONS:
+		return "timeseries"
+
 	raise ValueError(
-		f"Unsupported input file type '{filename}'. "
-		"Expected a JSON datalist or supported image file."
+		f"Unsupported input file type '{filename}'"
 	)
+
 
 
 def read_datalist(filename: str | Path, key: str = DEFAULT_DATALIST_KEY) -> list[dict[str, Any]]:
