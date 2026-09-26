@@ -155,6 +155,9 @@ def main(argv=None) -> int:
 		)
 		
 		extractor = create_extractor(config)
+		
+		spec = get_backend_spec(args.backend)
+		modality = get_backend_modality(args.backend)
 
 		# - Extract features
 		if input_type == "image":

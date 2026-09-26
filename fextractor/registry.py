@@ -116,3 +116,17 @@ def get_extractor_factory(backend: str) -> Callable:
 	"""Resolve a backend name to its configuration factory lazily."""
 	spec = get_backend_spec(backend)
 	return _import_object(spec.factory_path)
+	
+def get_backend_modality(name: str) -> str:
+	"""Return the modality associated with a registered backend."""
+	return get_backend_spec(name).modality
+	
+def list_modalities() -> tuple[str, ...]:
+	"""Return the modalities exposed by registered backends."""
+	return tuple(
+		dict.fromkeys(
+			spec.modality
+			for spec in _BACKEND_SPECS
+		)
+	)
+
