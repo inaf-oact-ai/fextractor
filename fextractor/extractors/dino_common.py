@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from ..base import FeatureExtractor
-from ..image_utils import to_uint8_rgb
+from ..image.utils import to_uint8_rgb
 from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, read_image
 
 

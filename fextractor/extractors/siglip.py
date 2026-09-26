@@ -10,7 +10,7 @@ from PIL import Image
 
 from ..base import FeatureExtractor
 from ..config import ExtractorConfig
-from ..image_utils import ensure_channels, to_uint8_rgb
+from ..image.utils import ensure_channels, to_uint8_rgb
 from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, read_image
 
 logger = logging.getLogger(__name__)
