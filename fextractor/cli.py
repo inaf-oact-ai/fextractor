@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 	# == MANDATORY OPTIONS ==
 	parser.add_argument("--backend", required=True, choices=list_backends())
-	parser.add_argument("--inputfile", required=True, help="Input image or JSON datalist")
+	parser.add_argument("--inputfile", required=True, help="Input data file or JSON datalist")
 
 	# == INPUT DATA OPTIONS ==
 	parser.add_argument("--datalist-key", default="data")
