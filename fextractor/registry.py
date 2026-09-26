@@ -68,7 +68,7 @@ _BACKEND_SPECS = (
 		modality="image",
 		class_path="fextractor.extractors.siglip2:SigLIP2FeatureExtractor",
 		factory_path="fextractor.extractors.siglip2:create",
-		default_model="google/siglip2-base-patch16-224",
+		default_model="google/siglip2-so400m-patch14-384",
 		dependency_group="siglip2",
 	),
 )

@@ -17,8 +17,7 @@ from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, re
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "google/siglip2-base-patch16-224"
-
+DEFAULT_MODEL = "google/siglip2-so400m-patch14-384"
 
 class SigLIP2FeatureExtractor(FeatureExtractor):
 	"""Extract image representations from Hugging Face SigLIP2 models."""

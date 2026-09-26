@@ -16,7 +16,8 @@ from ..preprocessing import ImagePreprocessConfig, apply_image_preprocessing, re
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "dinov2_vits14"
-
+DEFAULT_REPO_DIR = "/opt/models/dinov2_legacy/repo"
+DEFAULT_WEIGHTS = "/opt/models/dinov2_legacy/dinov2_vits14_pretrain.pth"
 
 class DINOv2LegacyFeatureExtractor(FeatureExtractor):
 	"""Extract DINOv2 representations using the original Facebook torch.hub implementation."""
@@ -27,12 +28,15 @@ class DINOv2LegacyFeatureExtractor(FeatureExtractor):
 	def __init__(
 		self,
 		model_name: str = DEFAULT_MODEL,
+		model_weights: str | None = None,
 		device: str = "cuda",
 		imgsize: int = 224,
 		preprocessing: ImagePreprocessConfig | None = None,
 	) -> None:
 		super().__init__()
 		self.model_name = model_name
+		self.model_weights = model_weights or DEFAULT_WEIGHTS
+		self.repo_dir = DEFAULT_REPO_DIR
 		self.requested_device = device
 		self.device = device
 		self.imgsize = imgsize
@@ -76,10 +80,28 @@ class DINOv2LegacyFeatureExtractor(FeatureExtractor):
 		else:
 			logger.info("Using device='%s'", self.device)
 
+		
+		repo_dir = Path(self.repo_dir)
+		weights_path = Path(self.model_weights)
+
+		if not repo_dir.is_dir():
+			raise RuntimeError(
+				"Local DINOv2 repository not found: %s" % repo_dir
+			)
+
+		if not weights_path.is_file():
+			raise RuntimeError(
+				"Local DINOv2 weights not found: %s" % weights_path
+			)
+
 		self.model = torch.hub.load(
-			"facebookresearch/dinov2",
-			self.model_name,
+			repo_or_dir=str(repo_dir),
+			model=self.model_name,
+			source="local",
+			pretrained=True,
+			weights=str(weights_path),
 		)
+
 
 		self.model.to(self.device)
 		self.model.eval()
@@ -154,6 +176,8 @@ class DINOv2LegacyFeatureExtractor(FeatureExtractor):
 		metadata = super().metadata()
 		metadata.update({
 			"model": self.model_name,
+			"model_weights": self.model_weights,
+			"repo_dir": self.repo_dir,
 			"requested_device": self.requested_device,
 			"device": self.device,
 			"imgsize": self.imgsize,
@@ -163,9 +187,9 @@ class DINOv2LegacyFeatureExtractor(FeatureExtractor):
 
 
 def create(config: ExtractorConfig) -> DINOv2LegacyFeatureExtractor:
-	"""Create a legacy torch.hub DINOv2 extractor from configuration."""
 	return DINOv2LegacyFeatureExtractor(
 		model_name=config.model or DEFAULT_MODEL,
+		model_weights=config.model_weights,
 		device=config.device,
 		imgsize=config.imgsize if config.imgsize is not None else 224,
 		preprocessing=config.preprocessing,
