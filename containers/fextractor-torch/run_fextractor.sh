@@ -24,60 +24,63 @@ if [ "$NARGS" -lt 1 ]; then
 	echo ""
 
 	echo "*** OPTIONAL ARGS ***"
-	echo "=== INPUT OPTIONS ==="
-	echo "--datalist-key=[KEY] - Dictionary key name to be read in input datalist. Default: data"
-	echo ""
 	
+	echo "=== INPUT OPTIONS ==="
+	echo "--datalist-key=[KEY] - Dictionary key containing datalist entries. Default: data"
+	echo "--nmax=[N] - Maximum number of datalist entries to process. Default: all"
+	echo ""
+
 	echo "=== MODEL OPTIONS ==="
 	echo "--model=[MODEL] - Feature extractor model/backend."
 	echo "  Available models:"
-	echo "    dinov2         - Hugging Face DINOv2 ViT-S/14"
-	echo "    dinov3         - Hugging Face DINOv3 ViT-S/16"
-	echo "    dinov2_legacy  - Original Meta DINOv2 ViT-S/14 implementation"
-	echo "    siglip          - SigLIP SO400M patch14 384"
-	echo "    siglip2         - SigLIP2 SO400M patch14 384"
+	echo "    dinov2"
+	echo "    dinov3"
+	echo "    dinov2_legacy"
+	echo "    siglip"
+	echo "    siglip2"
 	echo "  Default: siglip2"
-
 	echo ""
-	
-	echo "=== DATA PRE-PROCESSING OPTIONS ==="
-	echo "--preproc-profile=[PROFILE] - Scientific image preprocessing profile {default, simclr_radio}. Preprocessing options below override profile settings. Default: default"
-	echo "--norm-min=[NORM_MIN] - MinMax normalization min value. Default: 0.0"
-	echo "--norm-max=[NORM_MAX] - MinMax normalization max value. Default: 1.0"
-	echo "--imgsize=[IMGSIZE] - Override model input image size in pixels. If omitted, the backend/model default is used."
-	echo "  Used by backends that explicitly support wrapper-controlled resize (e.g. dinov2_legacy, siglip)."
-	echo "  Hugging Face DINO backends (dinov2, dinov3) use the image size defined by their HF processor/model and ignore this option."
 
-	echo "--nchannels=[IN_CHANS] - Override number of model input channels. If omitted, the backend/model default is used."
-	echo "  This controls fextractor scientific preprocessing metadata/input handling where supported."
-	echo "  Hugging Face vision backends ultimately convert the processed image to RGB before model inference."
+	echo "=== IMAGE PREPROCESSING OPTIONS ==="
+	echo "--preproc-profile=[PROFILE] - Image preprocessing profile. Default: default"
+	echo "--norm-min=[VALUE] - MinMax normalization minimum. Default: 0.0"
+	echo "--norm-max=[VALUE] - MinMax normalization maximum. Default: 1.0"
+	echo "--imgsize=[N] - Optional model input image size override"
+	echo "--nchannels=[N] - Optional input-channel override (mapped to fextractor --in-chans)"
+	echo "--clipdata - Enable scientific image clipping"
+	echo "--zscale - Enable zscale stretching"
+	echo "--no-zscale - Disable zscale stretching"
+	echo "--zscale-contrast=[VALUE] - zscale contrast. Default: 0.25"
+	echo "--set-zero-to-min - Replace blank/zero/non-finite pixels with minimum valid value"
+	echo ""
 
-	echo "--clipdata - Clip image pixel value in range [mean-5*stddev, mean+30*stddev]. Default: not applied"
-	echo "--zscale - Apply zscale stretching to image. Enabled by default with profile=simclr_radio"
-	echo "--no-zscale - Disable zscale stretching to image."
-	echo "--zscale-contrast=[ZSCALE_CONTRAST] - Contrast used for zscale stretching. Default: 0.25"
-	echo "--set-zero-to-min - Set zero/blank/nan pixels to image min value. Default: not applied"
-	echo "--reset-meanstd - Override SigLIP processor mean/std with mean=0 and std=1. Default: disabled."
-	echo "--reset-rescale - Disable SigLIP processor input rescaling. Default: disabled."
-	
+	echo "=== MODEL PROCESSOR OPTIONS ==="
+	echo "--reset-meanstd - SigLIP: reset processor mean/std"
+	echo "--reset-rescale - SigLIP: disable processor rescaling"
 	echo ""
 	
 	echo "=== SAVE OPTIONS ==="
-	echo "--outfile=[FILENAME] - Name of output file. Default: fextractor_results.json"
-	
-	echo "=== RUN OPTIONS ==="
-	echo "--run - Run the generated run script on the local shell. If disabled only run script will be generated for later run."	
-	echo "--scriptdir=[SCRIPT_DIR] - Job directory where to find scripts (default=/usr/bin)"
-	echo "--modeldir=[MODEL_DIR] - Job directory where to find model & weight files (default=/opt/models)"
-	echo "--jobdir=[JOB_DIR] - Job directory where to run (default=pwd)"
-	echo "--outdir=[OUTPUT_DIR] - Output directory where to put run output file (default=pwd)"
-	echo "--waitcopy - Wait a bit after copying output files to output dir (default=no)"
-	echo "--copywaittime=[COPY_WAIT_TIME] - Time to wait after copying output files (default=30)"
-	echo "--no-logredir - Do not redirect logs to output file in script "	
+	echo "--outfile=[FILENAME] - Output JSON filename. Default: fextractor_results.json"
+	echo ""
+
+	echo "=== FEXTRACTOR RUN OPTIONS ==="
+	echo "--device=[DEVICE] - Inference device. Default: cuda"
+	echo "--skip-errors - Skip failed datalist entries instead of aborting the run"
+	echo ""
+
+	echo "=== WRAPPER RUN OPTIONS ==="
+	echo "--run - Execute the generated submission script"
+	echo "--modeldir=[MODEL_DIR] - Directory containing local model files. Default: /opt/models"
+	echo "--jobdir=[JOB_DIR] - Working directory. Default: current directory"
+	echo "--outdir=[OUTPUT_DIR] - Output directory. Default: current directory"
+	echo "--waitcopy - Wait after copying outputs"
+	echo "--copywaittime=[SECONDS] - Copy wait duration. Default: 30"
+	echo "--no-logredir - Print fextractor logs directly instead of redirecting to out.log"
+	echo ""
 	echo "=========================="
+	
   exit 1
 fi
-
 
 #######################################
 ##         PARSE ARGS
@@ -96,6 +99,11 @@ MODEL_DIR="/opt/models"
 INPUTFILE=""
 INPUTFILE_GIVEN=false
 DATALIST_KEY="data"
+NMAX=""
+
+# - Run options passed to fextractor
+SKIP_ERRORS_OPT=""
+DEVICE="cuda"
 
 # - Model options
 MODEL="siglip2"
@@ -130,45 +138,48 @@ do
 		# **************************
 		# - INPUT OPTIONS 	
     --inputfile=*)
-    	INPUTFILE=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`		
+    	INPUTFILE=`echo "$item" | sed 's/^[^=]*=//'`
 			if [ "$INPUTFILE" != "" ]; then
 				INPUTFILE_GIVEN=true
 			fi
     ;;
     --datalist-key=*)
-    	DATALIST_KEY=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    	DATALIST_KEY=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
+    --nmax=*)
+			NMAX=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
     
     # **************************
 		# **   OPTIONAL OPTIONS 
 		# **************************
 		# - MODEL options
 		--model=*)
-    	MODEL=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    	MODEL=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
 		
 		# - PREPROC OPTIONS
 		--preproc-profile=*)
-    	PREPROC_PROFILE=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    	PREPROC_PROFILE=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --norm-min=*)
-    	NORM_MIN=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	NORM_MIN=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --norm-max=*)
-    	NORM_MAX=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	NORM_MAX=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --imgsize=*)
-    	IMGSIZE=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	IMGSIZE=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --nchannels=*)
-    	IN_CHANS=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	IN_CHANS=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
 		--clipdata)
 			CLIP_DATA="--clip-data"
 		;;
 		# NB: Put this before --zscale otherwise the --zscale matches also the --zscale-contrasts
     --zscale-contrast=*)
-			ZSCALE_CONTRAST=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+			ZSCALE_CONTRAST=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 		--zscale)
 			ZSCALE_STRETCH="--zscale"
@@ -188,30 +199,38 @@ do
 		 	    
     # - SAVE OPTIONS
     --outfile=*)
-    	OUTFILE=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	OUTFILE=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
 	
-		# - RUN OPTIONS
+		# - FEXTRACTOR RUN OPTIONS
+		--device=*)
+			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+		--skip-errors)
+			SKIP_ERRORS_OPT="--skip-errors"
+		;;
+	
+		# - WRAPPER RUN OPTIONS
     --run*)
     	RUN_SCRIPT=true
     ;;
     --scriptdir=*)
-    	SCRIPT_DIR=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	SCRIPT_DIR=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --outdir=*)
-    	JOB_OUTDIR=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	JOB_OUTDIR=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --modeldir=*)
-			MODEL_DIR=`echo "$item" | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+			MODEL_DIR=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 		--waitcopy*)
     	WAIT_COPY=true
     ;;
 		--copywaittime=*)
-    	COPY_WAIT_TIME=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	COPY_WAIT_TIME=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --jobdir=*)
-    	JOB_DIR=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	JOB_DIR=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --no-logredir*)
 			REDIRECT_LOGS=false
@@ -244,6 +263,11 @@ fi
 ##   SET OPTIONS
 #######################################
 INPUT_OPTS="--inputfile=$INPUTFILE --datalist-key=$DATALIST_KEY "
+
+if [ "$NMAX" != "" ]; then
+	INPUT_OPTS="$INPUT_OPTS --nmax=$NMAX "
+fi
+
 
 PREPROC_OPTS="--profile=$PREPROC_PROFILE \
 --norm-min=$NORM_MIN \
@@ -346,7 +370,9 @@ else
 
 fi
 
-RUN_OPTS="--backend=$BACKEND "
+FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
+
+RUN_OPTS="--backend=$BACKEND $FEXTRACTOR_RUN_OPTS "
 
 echo "INFO: MODEL=$MODEL"
 echo "INFO: BACKEND=$BACKEND"
