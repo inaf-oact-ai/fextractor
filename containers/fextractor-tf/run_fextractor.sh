@@ -26,13 +26,14 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "*** OPTIONAL ARGS ***"
 	echo "=== INPUT OPTIONS ==="
 	echo "--datalist-key=[KEY] - Dictionary key name to be read in input datalist. Default: data"
+	echo "--nmax=[N] - Maximum number of datalist entries to process. Default: all"
 	echo ""
 	
 	echo "=== MODEL OPTIONS ==="
 	echo "--model=[MODEL] - Model to be used for extracting the embedding. Available: {'simclr_radio'}. Default: 'simclr_radio'"
 	echo ""
 	
-	echo "=== DATA PRE-PROCESSING OPTIONS ==="
+	echo "=== IMAGE PREPROCESSING OPTIONS ==="
 	echo "--preproc-profile=[PROFILE] - Scientific image preprocessing profile {default, simclr_radio}. Preprocessing options below override profile settings. Default: default"
 	echo "--norm-min=[NORM_MIN] - MinMax normalization min value. Default: 0.0"
 	echo "--norm-max=[NORM_MAX] - MinMax normalization max value. Default: 1.0"
@@ -50,8 +51,14 @@ if [ "$NARGS" -lt 1 ]; then
 	
 	echo "=== SAVE OPTIONS ==="
 	echo "--outfile=[FILENAME] - Name of output file. Default: fextractor_results.json"
+	echo ""
 	
-	echo "=== RUN OPTIONS ==="
+	echo "=== FEXTRACTOR RUN OPTIONS ==="
+	echo "--device=[DEVICE] - Inference device. Default: cuda"
+	echo "--skip-errors - Skip failed datalist entries instead of aborting the run"
+	echo ""
+	
+	echo "=== WRAPPER RUN OPTIONS ==="
 	echo "--run - Run the generated run script on the local shell. If disabled only run script will be generated for later run."	
 	echo "--scriptdir=[SCRIPT_DIR] - Job directory where to find scripts (default=/usr/bin)"
 	echo "--modeldir=[MODEL_DIR] - Job directory where to find model & weight files (default=/opt/models)"
@@ -82,6 +89,11 @@ MODEL_DIR="/opt/models"
 INPUTFILE=""
 INPUTFILE_GIVEN=false
 DATALIST_KEY="data"
+NMAX=""
+
+# - Run options passed to fextractor
+SKIP_ERRORS_OPT=""
+DEVICE="cuda"
 
 # - Model options
 MODEL="simclr_radio"
@@ -112,45 +124,48 @@ do
 		# **************************
 		# - INPUT OPTIONS 	
     --inputfile=*)
-    	INPUTFILE=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`		
+    	INPUTFILE=`echo "$item" | sed 's/^[^=]*=//'`		
 			if [ "$INPUTFILE" != "" ]; then
 				INPUTFILE_GIVEN=true
 			fi
     ;;
     --datalist-key=*)
-    	DATALIST_KEY=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    	DATALIST_KEY=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
+    --nmax=*)
+			NMAX=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
     
     # **************************
 		# **   OPTIONAL OPTIONS 
 		# **************************
 		# - MODEL options
 		--model=*)
-    	MODEL=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    	MODEL=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
 		
 		# - PREPROC OPTIONS
 		--preproc-profile=*)
-    	PREPROC_PROFILE=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    	PREPROC_PROFILE=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --norm-min=*)
-    	NORM_MIN=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	NORM_MIN=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --norm-max=*)
-    	NORM_MAX=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	NORM_MAX=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --imgsize=*)
-    	IMGSIZE=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	IMGSIZE=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --nchannels=*)
-    	IN_CHANS=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	IN_CHANS=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
 		--clipdata)
 			CLIP_DATA="--clip-data"
 		;;
 		# NB: Put this before --zscale otherwise the --zscale matches also the --zscale-contrasts
     --zscale-contrast=*)
-			ZSCALE_CONTRAST=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+			ZSCALE_CONTRAST=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 		--zscale)
 			ZSCALE_STRETCH="--zscale"
@@ -164,30 +179,39 @@ do
  	    
     # - SAVE OPTIONS
     --outfile=*)
-    	OUTFILE=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	OUTFILE=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
 	
+		# - FEXTRACTOR RUN OPTIONS
+		--device=*)
+			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--skip-errors)
+			SKIP_ERRORS_OPT="--skip-errors"
+		;;
+		
 		# - RUN OPTIONS
     --run*)
     	RUN_SCRIPT=true
     ;;
     --scriptdir=*)
-    	SCRIPT_DIR=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	SCRIPT_DIR=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --outdir=*)
-    	JOB_OUTDIR=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	JOB_OUTDIR=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --modeldir=*)
-			MODEL_DIR=`echo "$item" | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+			MODEL_DIR=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 		--waitcopy*)
     	WAIT_COPY=true
     ;;
 		--copywaittime=*)
-    	COPY_WAIT_TIME=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	COPY_WAIT_TIME=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --jobdir=*)
-    	JOB_DIR=`echo $item | /bin/sed 's/[-a-zA-Z0-9]*=//'`
+    	JOB_DIR=`echo "$item" | sed 's/^[^=]*=//'`
     ;;
     --no-logredir*)
 			REDIRECT_LOGS=false
@@ -221,6 +245,11 @@ fi
 #######################################
 INPUT_OPTS="--inputfile=$INPUTFILE --datalist-key=$DATALIST_KEY "
 
+if [ "$NMAX" != "" ]; then
+	INPUT_OPTS="$INPUT_OPTS --nmax=$NMAX "
+fi
+
+
 PREPROC_OPTS="--profile=$PREPROC_PROFILE \
 --norm-min=$NORM_MIN \
 --norm-max=$NORM_MAX \
@@ -240,21 +269,34 @@ fi
 SAVE_OPTS="--outfile=$OUTFILE "
 
 if [ "$MODEL" = "simclr_radio" ]; then
+
+	BACKEND="tensorflow"
+
 	MODELFILE="$MODEL_DIR/simclr_radio/resnet18/encoder-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5"
 	WEIGHTFILE="$MODEL_DIR/simclr_radio/resnet18/encoder_weights-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5"
-	MODEL_OPTS="--keras-loader=tf_keras --model=$MODELFILE --model-weights=$WEIGHTFILE " # Legacy Keras
 
-#elif [ "$MODEL" = "simclr_radio_v2" ]; then
-#	MODELFILE="$MODEL_DIR/simclr_radio/resnet18/encoder-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5"
-#	WEIGHTFILE="$MODEL_DIR/simclr_radio/resnet18/encoder_weights-resnet18_simclr_hulk256-smgps_ch1_100epochs.h5"
-#	MODEL_OPTS="--keras-loader=tf_keras --model=$MODELFILE --model-weights=$WEIGHTFILE " # Legacy Keras
+	if [ ! -f "$MODELFILE" ]; then
+		echo "ERROR: SimCLR model file not found: $MODELFILE"
+		exit 1
+	fi
 
-else 
-	echo "ERROR: Unknown/not supported MODEL argument $MODEL given!"
-  exit 1
+	if [ ! -f "$WEIGHTFILE" ]; then
+		echo "ERROR: SimCLR weights file not found: $WEIGHTFILE"
+		exit 1
+	fi
+
+	MODEL_OPTS="--keras-loader=tf_keras --model=$MODELFILE --model-weights=$WEIGHTFILE "
+
+else
+	echo "ERROR: Unknown/not supported MODEL argument '$MODEL'!"
+	echo "Available models: simclr_radio"
+	exit 1
+
 fi
 
-RUN_OPTS="--backend=$BACKEND "
+FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
+
+RUN_OPTS="--backend=$BACKEND $FEXTRACTOR_RUN_OPTS "
 
 #######################################
 ##   DEFINE GENERATE EXE SCRIPT FCN
