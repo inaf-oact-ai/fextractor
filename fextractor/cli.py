@@ -67,8 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--norm-min", type=float)
 	parser.add_argument("--norm-max", type=float)
 	parser.add_argument("--set-zero-to-min", action=argparse.BooleanOptionalAction, default=None)
-	parser.add_argument("--reset-meanstd", action="store_true", help="SigLIP: reset processor mean/std")
-	parser.add_argument("--reset-rescale", action="store_true", help="SigLIP: disable processor rescaling")
+	parser.add_argument("--reset-meanstd", action="store_true", help="SigLIP/SigLIP2: reset processor mean/std")
+	parser.add_argument("--reset-rescale", action="store_true", help="SigLIP/SigLIP2: disable processor rescaling")
 	
 	# == TIME-SERIES OPTIONS ==
 	parser.add_argument("--time-column", default=None, help="Time-series timestamp column")

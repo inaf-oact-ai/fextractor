@@ -11,7 +11,10 @@ from PIL import Image
 
 from ...base import FeatureExtractor
 from ...config import ExtractorConfig
-from ...image.utils import to_uint8_rgb
+from ...image.utils import (
+	ensure_channels,
+	to_uint8_rgb,
+)
 from ...image.io import read_image
 from ...preprocessing import ImagePreprocessConfig, apply_image_preprocessing
 
@@ -29,13 +32,26 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 		self,
 		model_name: str = DEFAULT_MODEL,
 		device: str = "cuda",
+		imgsize: int | None = None,
+		reset_meanstd: bool = False,
+		reset_rescale: bool = False,
 		preprocessing: ImagePreprocessConfig | None = None,
 	) -> None:
 		super().__init__()
+
 		self.model_name = model_name
 		self.requested_device = device
 		self.device = device
-		self.preprocessing = preprocessing or ImagePreprocessConfig()
+
+		self.imgsize = imgsize
+		self.reset_meanstd = reset_meanstd
+		self.reset_rescale = reset_rescale
+
+		self.preprocessing = (
+			preprocessing
+			or ImagePreprocessConfig()
+		)
+
 		self.model = None
 		self.processor = None
 		self.torch = None
@@ -84,17 +100,84 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 			self.model_name,
 		)
 
-		logger.info(
-			"SigLIP2 model loaded successfully: model='%s' device='%s'",
-			self.model_name,
-			self.device,
+		image_processor = (
+			self.processor.image_processor
 		)
 
-	def prepare(self, source: str | Path) -> Image.Image:
-		"""Read one image and apply scientific preprocessing before HF processing."""
+		if self.imgsize is not None:
+			if isinstance(
+				image_processor.size,
+				dict,
+			):
+				if "height" in image_processor.size:
+					image_processor.size[
+						"height"
+					] = self.imgsize
+
+				if "width" in image_processor.size:
+					image_processor.size[
+						"width"
+					] = self.imgsize
+
+				if "shortest_edge" in image_processor.size:
+					image_processor.size[
+						"shortest_edge"
+					] = self.imgsize
+
+		if self.reset_meanstd:
+			logger.info(
+				"Resetting SigLIP2 processor mean/std"
+			)
+
+			image_processor.image_mean = [
+				0.0,
+				0.0,
+				0.0,
+			]
+
+			image_processor.image_std = [
+				1.0,
+				1.0,
+				1.0,
+			]
+
+		if self.reset_rescale:
+			logger.info(
+				"Disabling SigLIP2 processor rescaling"
+			)
+
+			image_processor.do_rescale = False
+			image_processor.rescale_factor = 1.0
+
+		logger.info(
+			"SigLIP2 model loaded successfully: "
+			"model='%s' device='%s' imgsize=%s",
+			self.model_name,
+			self.device,
+			self.imgsize,
+		)
+
+	#def prepare_old(self, source: str | Path) -> Image.Image:
+	#	"""Read one image and apply scientific preprocessing before HF processing."""
+	#	data = read_image(source)
+	#	data = apply_image_preprocessing(data, self.preprocessing)
+	#	data = to_uint8_rgb(data)
+	#	return Image.fromarray(data, mode="RGB")
+
+	def prepare(self, source: str | Path):
+		"""Read one image and return processor-ready data."""
+		
 		data = read_image(source)
 		data = apply_image_preprocessing(data, self.preprocessing)
+
+		if self.reset_rescale:
+			return ensure_channels(
+				np.asarray(data, dtype=np.float32),
+				3,
+			)
+
 		data = to_uint8_rgb(data)
+
 		return Image.fromarray(data, mode="RGB")
 
 	def extract(self, source: str | Path) -> np.ndarray:
@@ -150,16 +233,41 @@ class SigLIP2FeatureExtractor(FeatureExtractor):
 			"model": self.model_name,
 			"requested_device": self.requested_device,
 			"device": self.device,
-			"preprocessing": self.preprocessing.__dict__.copy(),
+			"imgsize": self.imgsize,
+			"reset_meanstd": self.reset_meanstd,
+			"reset_rescale": self.reset_rescale,
+			"preprocessing": (
+				self.preprocessing.__dict__.copy()
+			),
 		})
 
 		return metadata
 
+	
+def create(
+	config: ExtractorConfig,
+) -> SigLIP2FeatureExtractor:
+	"""Create a SigLIP2 extractor from configuration."""
 
-def create(config: ExtractorConfig) -> SigLIP2FeatureExtractor:
-	"""Create a SigLIP2 extractor from a backend-neutral configuration."""
 	return SigLIP2FeatureExtractor(
-		model_name=config.model or DEFAULT_MODEL,
+		model_name=(
+			config.model
+			or DEFAULT_MODEL
+		),
 		device=config.device,
+		imgsize=config.imgsize,
+		reset_meanstd=bool(
+			config.get_option(
+				"reset_meanstd",
+				False,
+			)
+		),
+		reset_rescale=bool(
+			config.get_option(
+				"reset_rescale",
+				False,
+			)
+		),
 		preprocessing=config.preprocessing,
-	)
+	)	
+
