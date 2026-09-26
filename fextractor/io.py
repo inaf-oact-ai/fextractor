@@ -6,19 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .image.io import SUPPORTED_IMAGE_EXTENSIONS
 
 DEFAULT_DATALIST_KEY = "data"
-
-IMAGE_EXTENSIONS = {
-	".fits",
-	".fit",
-	".fts",
-	".png",
-	".jpg",
-	".jpeg",
-	".tif",
-	".tiff",
-}
 
 
 def detect_input_type(filename: str | Path) -> str:
@@ -33,7 +23,7 @@ def detect_input_type(filename: str | Path) -> str:
 	if name.endswith(".fits.gz"):
 		return "image"
 
-	if path.suffix.lower() in IMAGE_EXTENSIONS:
+	if path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS:
 		return "image"
 
 	raise ValueError(
