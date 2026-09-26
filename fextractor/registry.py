@@ -71,6 +71,22 @@ _BACKEND_SPECS = (
 		default_model="google/siglip2-so400m-patch14-384",
 		dependency_group="siglip2",
 	),
+	BackendSpec(
+		name="chronos2",
+		modality="timeseries",
+		class_path=(
+			"fextractor.extractors.timeseries.chronos2:"
+			"Chronos2FeatureExtractor"
+		),
+		factory_path=(
+			"fextractor.extractors.timeseries.chronos2:create"
+		),
+		aliases=(
+			"chronos",
+		),
+		default_model="amazon/chronos-2",
+		dependency_group="chronos",
+	),
 )
 
 _BACKENDS: dict[str, BackendSpec] = {}

@@ -13,10 +13,28 @@ def test_list_backends():
 		"dinov2_legacy",
 		"siglip",
 		"siglip2",
+		"chronos2",
 	)
 
 	assert list_backends() == expected
-	assert list_backends(modality="image") == expected
+
+	assert list_backends(
+		modality="image",
+	) == (
+		"tensorflow",
+		"dinov2",
+		"dinov3",
+		"dinov2_legacy",
+		"siglip",
+		"siglip2",
+	)
+
+	assert list_backends(
+		modality="timeseries",
+	) == (
+		"chronos2",
+	)
+
 
 def test_backend_alias():
 	spec = get_backend_spec("tf")
@@ -48,3 +66,35 @@ def test_legacy_factory_api():
 	extractor = create_extractor("dinov2", model_name="dinov2_vits14", device="cpu")
 	assert extractor.backend == "dinov2"
 	assert extractor.device == "cpu"
+	
+def test_chronos_factory_without_loading_model():
+	config = ExtractorConfig(
+		backend="chronos2",
+		device="cpu",
+		options={
+			"aggregation": "mean_std",
+			"context_length": 2048,
+			"batch_size": 16,
+		},
+	)
+
+	extractor = create_extractor(
+		config
+	)
+
+	assert extractor.backend == "chronos2"
+	assert extractor.modality == "timeseries"
+
+	assert extractor.model_name == (
+		"amazon/chronos-2"
+	)
+
+	assert extractor.aggregation == (
+		"mean_std"
+	)
+
+	assert extractor.context_length == 2048
+	assert extractor.batch_size == 16
+
+	assert extractor.device == "cpu"
+	assert not extractor.is_loaded
