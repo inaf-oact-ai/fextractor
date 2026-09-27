@@ -49,17 +49,17 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
 ##########################################################
 # NB: This torch container has already a user/group 1000 named ubuntu. Will be renamed. 
 # - Create user & set permissions
-#RUN groupadd --gid ${USER_GID} ${USER_NAME} \
-#    && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USER_NAME} \
-#    && chown -R ${USER_NAME}:${USER_NAME} ${HOME}
-
-RUN groupmod --new-name ${USER_NAME} ubuntu \
-    && usermod --login ${USER_NAME} \
-        --home ${HOME} \
-        --move-home \
-        --shell /bin/bash \
-        ubuntu \
+RUN groupadd --gid ${USER_GID} ${USER_NAME} \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USER_NAME} \
     && chown -R ${USER_NAME}:${USER_NAME} ${HOME}
+
+#RUN groupmod --new-name ${USER_NAME} ubuntu \
+#    && usermod --login ${USER_NAME} \
+#        --home ${HOME} \
+#        --move-home \
+#        --shell /bin/bash \
+#        ubuntu \
+#    && chown -R ${USER_NAME}:${USER_NAME} ${HOME}
 
 #################################
 ###    CREATE DIRS
