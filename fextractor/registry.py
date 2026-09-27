@@ -87,6 +87,22 @@ _BACKEND_SPECS = (
 		default_model="amazon/chronos-2",
 		dependency_group="chronos",
 	),
+	BackendSpec(
+		name="moirai2",
+		modality="timeseries",
+		class_path=(
+			"fextractor.extractors.timeseries.moirai2:"
+			"Moirai2FeatureExtractor"
+		),
+		factory_path=(
+			"fextractor.extractors.timeseries.moirai2:create"
+		),
+		aliases=(
+			"moirai",
+		),
+		default_model="Salesforce/moirai-2.0-R-small",
+		dependency_group="moirai",
+	),
 )
 
 _BACKENDS: dict[str, BackendSpec] = {}

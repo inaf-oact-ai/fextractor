@@ -81,12 +81,16 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--context-length", type=int, default=None, help="Optional backend context length")
 	parser.add_argument("--batch-size", type=int, default=None, help="Backend embedding batch size")
 	
+	# - MOIRAI OPTIONS
+	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
+	parser.add_argument("--token-order", choices=("by_variate", "interleave_time"), default=None, help="Moirai-2 token ordering for time_variate patching. If omitted, backend default is used.")
+	
+	# - TIME SERIES INPUT LAYOUT OPTIONS
 	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
 	parser.add_argument("--value-prefixes", nargs="+", default=None, help="Wide-layout time-series column prefixes")
 	parser.add_argument("--channel-names", nargs="+", default=None, help="Wide-layout channel names")
 	parser.add_argument("--label-column", default=None, help="Optional sample-level label column")
 	parser.add_argument("--metadata-columns", nargs="+", default=None, help="Additional sample-level metadata columns")
-	
 	parser.add_argument("--time-start-key", default=None, help="Inline JSON field containing the start timestamp")
 	parser.add_argument("--cadence-key", default=None, help="Inline JSON field containing the sampling cadence")
 	
@@ -308,6 +312,16 @@ def _config_from_args(
 	if args.batch_size is not None:
 		options["batch_size"] = (
 			args.batch_size
+		)
+		
+	if args.patching_mode is not None:
+		options["patching_mode"] = (
+			args.patching_mode
+		)
+
+	if args.token_order is not None:
+		options["token_order"] = (
+			args.token_order
 		)
 
 	return ExtractorConfig(
