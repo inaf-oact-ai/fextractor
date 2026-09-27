@@ -1,5 +1,7 @@
-FROM pytorch/pytorch:2.14.0-cuda12.6-cudnn9-runtime
-
+###  Moirai uni2ts required a torch<2.5 version so switching to a older base container
+###FROM pytorch/pytorch:2.14.0-cuda12.6-cudnn9-runtime
+FROM pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
+	
 LABEL org.opencontainers.image.title="fextractor-moirai" \
       org.opencontainers.image.description="Runtime for fextractor Moirai time-series models" \
       org.opencontainers.image.source="https://github.com/inaf-oact-ai/fextractor" \
@@ -72,6 +74,13 @@ RUN mkdir -p ${SOFTDIR} ${MODEL_DIR} ${HF_HOME} /workspace \
 # - Install OS packages
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl bzip2 unzip nano git fuse \
     && rm -rf /var/lib/apt/lists/*
+
+############################################################
+##   FIX TORCH/TORCHVISION VERSION INCOMPATIBILITY
+############################################################
+RUN python -m pip install --no-cache-dir \
+	torchvision==0.19.1 \
+	--index-url https://download.pytorch.org/whl/cu121
 
 ######################################
 ##     INSTALL RCLONE
