@@ -52,6 +52,11 @@ chronos = [
 	"chronos-forecasting>=2.1,<3"
 ]
 
+moirai = [
+	"uni2ts>=2.0,<3"
+]
+
+# - DEP GROUPS
 torch-all = [
 	"torch>=2.0",
 	"torchvision>=0.15",
@@ -59,7 +64,8 @@ torch-all = [
 ]
 
 timeseries-all = [
-	"chronos-forecasting>=2.1,<3"
+	"chronos-forecasting>=2.1,<3",
+	"uni2ts>=2.0,<3"
 ]
 
 all = [
@@ -68,11 +74,15 @@ all = [
 	"torch>=2.0",
 	"torchvision>=0.15",
 	"transformers>=4.56",
-	"chronos-forecasting>=2.1,<3"
+	"chronos-forecasting>=2.1,<3",
+	"uni2ts>=2.0,<3"
 ]
+
+# - TEST
 test = [
 	"pytest>=7.0"
 ]
+
 
 [project.scripts]
 fextractor = "fextractor.cli:main"
@@ -83,3 +93,7 @@ include = ["fextractor*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+	"integration: tests requiring heavyweight external models",
+]
+
