@@ -247,6 +247,7 @@ do
 			BATCH_SIZE=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
+		# - FEXTRACTOR RUN OPTIONS
 		--device=*)
 			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
@@ -260,7 +261,7 @@ do
 			OUTFILE=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 	
-		# - RUN OPTIONS
+		# - WRAPPER RUN OPTIONS
     --run*)
     	RUN_SCRIPT=true
     ;;
@@ -349,31 +350,33 @@ fi
 
 PREPROC_OPTS="$PREPROC_OPTS $REGULARIZE_OPT "
 
-# - For list arguments convert commas to spaces
+
+# - For list arguments convert commas to colons :
 if [ "$VALUE_COLUMNS" != "" ]; then
-	VALUE_COLUMNS_ARGS=`echo "$VALUE_COLUMNS" | tr ',' ' '`
+	VALUE_COLUMNS_ARGS=`echo "$VALUE_COLUMNS" | tr ':' ' '`
 	PREPROC_OPTS="$PREPROC_OPTS --value-columns $VALUE_COLUMNS_ARGS "
 fi
 
 if [ "$ERROR_COLUMNS" != "" ]; then
-	ERROR_COLUMNS_ARGS=`echo "$ERROR_COLUMNS" | tr ',' ' '`
+	ERROR_COLUMNS_ARGS=`echo "$ERROR_COLUMNS" | tr ':' ' '`
 	PREPROC_OPTS="$PREPROC_OPTS --error-columns $ERROR_COLUMNS_ARGS "
 fi
 
 if [ "$VALUE_PREFIXES" != "" ]; then
-	VALUE_PREFIXES_ARGS=`echo "$VALUE_PREFIXES" | tr ',' ' '`
+	VALUE_PREFIXES_ARGS=`echo "$VALUE_PREFIXES" | tr ':' ' '`
 	PREPROC_OPTS="$PREPROC_OPTS --value-prefixes $VALUE_PREFIXES_ARGS "
 fi
 
 if [ "$CHANNEL_NAMES" != "" ]; then
-	CHANNEL_NAMES_ARGS=`echo "$CHANNEL_NAMES" | tr ',' ' '`
+	CHANNEL_NAMES_ARGS=`echo "$CHANNEL_NAMES" | tr ':' ' '`
 	PREPROC_OPTS="$PREPROC_OPTS --channel-names $CHANNEL_NAMES_ARGS "
 fi
 
 if [ "$METADATA_COLUMNS" != "" ]; then
-	METADATA_COLUMNS_ARGS=`echo "$METADATA_COLUMNS" | tr ',' ' '`
+	METADATA_COLUMNS_ARGS=`echo "$METADATA_COLUMNS" | tr ':' ' '`
 	PREPROC_OPTS="$PREPROC_OPTS --metadata-columns $METADATA_COLUMNS_ARGS "
 fi
+
 
 REPRESENTATION_OPTS=""
 
