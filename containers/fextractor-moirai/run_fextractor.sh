@@ -46,22 +46,37 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "--time-column=[COLUMN] - Timestamp column name for tabular input"
 	echo "--value-columns=[COL1:COL2:...] - Value columns for long-layout input, or inline JSON value fields"
 	echo "--error-columns=[COL1:COL2:...] - Optional uncertainty/error columns"
+	echo "--error-prefixes=[PREFIX1:PREFIX2:...] - Error prefixes for wide-layout input"
+	echo "--time-prefix=[PREFIX] - Timestamp prefix for irregular wide-layout input"
+	echo "--time-start-column=[COLUMN] - Start-time column for regular wide-layout input"
+	echo "--cadence-column=[COLUMN] - Cadence column for regular wide-layout input"
 	echo ""
 	echo "--value-prefixes=[PREFIX1:PREFIX2:...] - Channel column prefixes for wide-layout input"
 	echo "--channel-names=[NAME1:NAME2:...] - Logical names assigned to time-series channels"
 	echo "--label-column=[COLUMN] - Optional sample-level label column for wide-layout input"
 	echo "--metadata-columns=[COL1:COL2:...] - Additional sample-level metadata columns"
-
 	echo ""
 	echo "--time-start-key=[KEY] - Inline JSON field containing the start timestamp"
 	echo "--cadence-key=[KEY] - Inline JSON field containing the sampling cadence"
 	echo ""
-	echo "--regularize - Regularize timestamps onto a fixed sampling grid"
-	echo "--no-regularize - Explicitly disable timestamp regularization"
-	echo "--cadence=[VALUE] - Target cadence used during regularization"
-	echo "--missing-strategy=[STRATEGY] - Missing-value strategy after regularization: nan or linear"
+	echo "--regularize - Enable regularization onto a fixed temporal grid"
+	echo "--no-regularize - Explicitly disable regularization"
+	echo "--regularization-method=[METHOD] - Regularization method: bin or gp"
+	echo "--cadence=[VALUE] - Target cadence in timestamp units"
+	echo "--missing-strategy=[STRATEGY] - Bin missing-value strategy: nan, linear, pchip, akima, or cubic"
+	echo "--bin-aggregation=[METHOD] - Bin aggregation: mean or inverse-variance"
+	echo "--gp-sigma=[VALUE] - Optional GP kernel amplitude"
+	echo "--gp-rho=[VALUE] - Optional GP Matern-3/2 correlation length scale"
+	echo "--gp-jitter=[VALUE] - Optional GP noise floor when measurement errors are unavailable"
 	echo ""
-
+	echo "--time-transform=[MODE] - Time-coordinate transform: none or origin"
+	echo "--value-transform=[MODE] - Value transform: none, maxabs, minmax, standard, or asinh"
+	echo "--value-transform-scale=[VALUE] - Optional scale used by transforms such as asinh"
+	echo "--alignment=[MODE] - Alignment anchor: none, peak-max, peak-min, or peak-abs"
+	echo "--alignment-window-before=[VALUE] - Time retained before the alignment anchor"
+	echo "--alignment-window-after=[VALUE] - Time retained after the alignment anchor"	
+	echo ""
+	
 	echo "=== REPRESENTATION OPTIONS ==="
 	echo "--aggregation=[METHOD] - Token embedding aggregation strategy"
 	echo "  Supported values are defined by fextractor (e.g. mean, std, max, mean_std, mean_max, mean_std_max, last, flatten)"
@@ -124,15 +139,33 @@ TIME_COLUMN=""
 VALUE_COLUMNS=""
 ERROR_COLUMNS=""
 VALUE_PREFIXES=""
+ERROR_PREFIXES=""
+TIME_PREFIX=""
+TIME_START_COLUMN=""
+CADENCE_COLUMN=""
 CHANNEL_NAMES=""
 LABEL_COLUMN=""
 METADATA_COLUMNS=""
 TIME_START_KEY=""
 CADENCE_KEY=""
 
+TIME_TRANSFORM=""
+VALUE_TRANSFORM=""
+VALUE_TRANSFORM_SCALE=""
+
+ALIGNMENT=""
+ALIGNMENT_WINDOW_BEFORE=""
+ALIGNMENT_WINDOW_AFTER=""
+
 REGULARIZE_OPT=""
+REGULARIZATION_METHOD=""
 CADENCE=""
 MISSING_STRATEGY=""
+BIN_AGGREGATION=""
+
+GP_SIGMA=""
+GP_RHO=""
+GP_JITTER=""
 
 # - Representation options
 AGGREGATION=""
@@ -200,6 +233,22 @@ do
 			VALUE_PREFIXES=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
+		--error-prefixes=*)
+			ERROR_PREFIXES=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--time-prefix=*)
+			TIME_PREFIX=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--time-start-column=*)
+			TIME_START_COLUMN=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--cadence-column=*)
+			CADENCE_COLUMN=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+			
 		--channel-names=*)
 			CHANNEL_NAMES=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
@@ -220,12 +269,56 @@ do
 			CADENCE_KEY=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
+		--time-transform=*)
+			TIME_TRANSFORM=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--value-transform=*)
+			VALUE_TRANSFORM=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--value-transform-scale=*)
+			VALUE_TRANSFORM_SCALE=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--alignment=*)
+			ALIGNMENT=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--alignment-window-before=*)
+			ALIGNMENT_WINDOW_BEFORE=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--alignment-window-after=*)
+			ALIGNMENT_WINDOW_AFTER=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
 		--regularize)
 			REGULARIZE_OPT="--regularize"
 		;;
 
 		--no-regularize)
 			REGULARIZE_OPT="--no-regularize"
+		;;
+		
+		--regularization-method=*)
+			REGULARIZATION_METHOD=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--bin-aggregation=*)
+			BIN_AGGREGATION=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--gp-sigma=*)
+			GP_SIGMA=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--gp-rho=*)
+			GP_RHO=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--gp-jitter=*)
+			GP_JITTER=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
 		--cadence=*)
@@ -341,12 +434,56 @@ if [ "$CADENCE_KEY" != "" ]; then
 	PREPROC_OPTS="$PREPROC_OPTS --cadence-key=\"$CADENCE_KEY\" "
 fi
 
+if [ "$TIME_TRANSFORM" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --time-transform=$TIME_TRANSFORM "
+fi
+
+if [ "$VALUE_TRANSFORM" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --value-transform=$VALUE_TRANSFORM "
+fi
+
+if [ "$VALUE_TRANSFORM_SCALE" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --value-transform-scale=$VALUE_TRANSFORM_SCALE "
+fi
+
+if [ "$ALIGNMENT" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --alignment=$ALIGNMENT "
+fi
+
+if [ "$ALIGNMENT_WINDOW_BEFORE" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --alignment-window-before=$ALIGNMENT_WINDOW_BEFORE "
+fi
+
+if [ "$ALIGNMENT_WINDOW_AFTER" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --alignment-window-after=$ALIGNMENT_WINDOW_AFTER "
+fi
+
+if [ "$REGULARIZATION_METHOD" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --regularization-method=$REGULARIZATION_METHOD "
+fi
+
 if [ "$CADENCE" != "" ]; then
 	PREPROC_OPTS="$PREPROC_OPTS --cadence=$CADENCE "
 fi
 
 if [ "$MISSING_STRATEGY" != "" ]; then
 	PREPROC_OPTS="$PREPROC_OPTS --missing-strategy=$MISSING_STRATEGY "
+fi
+
+if [ "$BIN_AGGREGATION" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --bin-aggregation=$BIN_AGGREGATION "
+fi
+
+if [ "$GP_SIGMA" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --gp-sigma=$GP_SIGMA "
+fi
+
+if [ "$GP_RHO" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --gp-rho=$GP_RHO "
+fi
+
+if [ "$GP_JITTER" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --gp-jitter=$GP_JITTER "
 fi
 
 PREPROC_OPTS="$PREPROC_OPTS $REGULARIZE_OPT "
@@ -366,6 +503,23 @@ fi
 if [ "$VALUE_PREFIXES" != "" ]; then
 	VALUE_PREFIXES_ARGS=`echo "$VALUE_PREFIXES" | tr ':' ' '`
 	PREPROC_OPTS="$PREPROC_OPTS --value-prefixes $VALUE_PREFIXES_ARGS "
+fi
+
+if [ "$ERROR_PREFIXES" != "" ]; then
+	ERROR_PREFIXES_ARGS=`echo "$ERROR_PREFIXES" | tr ':' ' '`
+	PREPROC_OPTS="$PREPROC_OPTS --error-prefixes $ERROR_PREFIXES_ARGS "
+fi
+
+if [ "$TIME_PREFIX" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --time-prefix=\"$TIME_PREFIX\" "
+fi
+
+if [ "$TIME_START_COLUMN" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --time-start-column=\"$TIME_START_COLUMN\" "
+fi
+
+if [ "$CADENCE_COLUMN" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --cadence-column=\"$CADENCE_COLUMN\" "
 fi
 
 if [ "$CHANNEL_NAMES" != "" ]; then
