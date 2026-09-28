@@ -22,7 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gp = [
-	"celerite2>=0.3",
+	#"celerite2>=0.3",# recent version requires py3.11
+	"celerite2==0.3.2",# this required py3.10
 ]
 
 tensorflow = [
