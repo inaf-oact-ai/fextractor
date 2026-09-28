@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="share/logo_fextractor.png" alt="fextractor logo" width="320"/>
+  <img src="share/fextractor_logo.png" alt="fextractor logo" width="320"/>
 </p>
 
 # fextractor
