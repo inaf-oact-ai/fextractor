@@ -17,15 +17,15 @@ show_usage(){
 	echo "=========================="
 
 	echo "*** MANDATORY ARGS ***"
-	echo "--inputfile=[FILENAME] - Input time-series CSV file"
+	echo "--inputfile=[FILENAME] - Input time-series CSV file or JSON datalist"
 	echo ""
 
 	echo "*** OPTIONAL ARGS ***"
 	echo ""
 
 	echo "=== INPUT OPTIONS ==="
-	echo "--datalist-key=[KEY] - Reserved for future datalist support"
-	echo "--nmax=[N] - Reserved for future datalist support"
+	echo "--datalist-key=[KEY] - JSON datalist root key (default: data)"
+	echo "--nmax=[N] - Maximum number of datalist entries to process"
 	echo ""
 
 	echo "=== MODEL OPTIONS ==="
@@ -36,12 +36,20 @@ show_usage(){
 	echo ""
 
 	echo "=== TIME-SERIES OPTIONS ==="
-	echo "--time-column=[COLUMN] - Timestamp column"
-	echo "--value-columns=[COL1:COL2:...] - One or more value columns"
-	echo "--error-columns=[COL1:COL2:...] - Optional uncertainty columns"
+	echo "--timeseries-layout=[long|wide] - CSV time-series layout (default: long)"
+	echo "--time-column=[COLUMN] - Timestamp column, or inline JSON time-array key"
+	echo "--value-columns=[COL1:COL2:...] - Long-layout columns or inline JSON value keys"
+	echo "--error-columns=[COL1:COL2:...] - Long-layout uncertainty columns or inline JSON error keys"
 	echo "--channel-names=[NAME1:NAME2:...] - Optional logical channel names"
+	echo "--value-prefixes=[PREFIX1:PREFIX2:...] - Wide-layout value prefixes"
+	echo "--error-prefixes=[PREFIX1:PREFIX2:...] - Wide-layout uncertainty prefixes"
+	echo "--time-prefix=[PREFIX] - Wide-layout indexed timestamp prefix"
+	echo "--time-start-column=[COLUMN] - Wide-layout regular-series start-time column"
+	echo "--cadence-column=[COLUMN] - Wide-layout regular-series cadence column"
+	echo "--time-start-key=[KEY] - Inline JSON regular-series start-time key"
+	echo "--cadence-key=[KEY] - Inline JSON regular-series cadence key"
 	echo ""
-
+	
 	echo "=== SAVE OPTIONS ==="
 	echo "--outfile=[FILENAME] - Output JSON filename"
 	echo "  Default: fextractor_results.json"
@@ -89,6 +97,17 @@ TIME_COLUMN=""
 VALUE_COLUMNS=""
 ERROR_COLUMNS=""
 CHANNEL_NAMES=""
+TIMESERIES_LAYOUT="long"
+
+VALUE_PREFIXES=""
+ERROR_PREFIXES=""
+
+TIME_PREFIX=""
+TIME_START_COLUMN=""
+CADENCE_COLUMN=""
+
+TIME_START_KEY=""
+CADENCE_KEY=""
 
 # - Save options
 OUTFILE="fextractor_results.json"
@@ -150,6 +169,38 @@ do
 			CHANNEL_NAMES=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
+		--timeseries-layout=*)
+			TIMESERIES_LAYOUT=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--value-prefixes=*)
+			VALUE_PREFIXES=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--error-prefixes=*)
+			ERROR_PREFIXES=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--time-prefix=*)
+			TIME_PREFIX=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--time-start-column=*)
+			TIME_START_COLUMN=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--cadence-column=*)
+			CADENCE_COLUMN=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--time-start-key=*)
+			TIME_START_KEY=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--cadence-key=*)
+			CADENCE_KEY=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+		
 		# ==========================
 		# SAVE OPTIONS
 		# ==========================
@@ -220,11 +271,6 @@ if [ "$MODEL" != "fats" ]; then
 	exit 1
 fi
 
-if [ "$VALUE_COLUMNS" = "" ]; then
-	echo "ERROR: Missing --value-columns argument!"
-	exit 1
-fi
-
 if [ "$JOB_DIR" = "" ]; then
 	echo "WARN: Empty JOB_DIR given, setting it to pwd ($PWD) ..."
 	JOB_DIR="$PWD"
@@ -241,8 +287,13 @@ fi
 #######################################
 
 INPUT_OPTS="--inputfile \"$INPUTFILE\""
+INPUT_OPTS="$INPUT_OPTS --datalist-key \"$DATALIST_KEY\""
 
-TIME_SERIES_OPTS=""
+if [ "$NMAX" != "" ]; then
+	INPUT_OPTS="$INPUT_OPTS --nmax \"$NMAX\""
+fi
+
+TIME_SERIES_OPTS="--timeseries-layout \"$TIMESERIES_LAYOUT\""
 
 if [ "$TIME_COLUMN" != "" ]; then
 	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --time-column \"$TIME_COLUMN\""
@@ -260,10 +311,42 @@ if [ "$ERROR_COLUMNS" != "" ]; then
 	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --error-columns $ERROR_COLUMNS_ARGS"
 fi
 
+if [ "$VALUE_PREFIXES" != "" ]; then
+	VALUE_PREFIXES_ARGS=`echo "$VALUE_PREFIXES" | tr ':' ' '`
+
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --value-prefixes $VALUE_PREFIXES_ARGS"
+fi
+
+if [ "$ERROR_PREFIXES" != "" ]; then
+	ERROR_PREFIXES_ARGS=`echo "$ERROR_PREFIXES" | tr ':' ' '`
+
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --error-prefixes $ERROR_PREFIXES_ARGS"
+fi
+
 if [ "$CHANNEL_NAMES" != "" ]; then
 	CHANNEL_NAMES_ARGS=`echo "$CHANNEL_NAMES" | tr ':' ' '`
 
 	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --channel-names $CHANNEL_NAMES_ARGS"
+fi
+
+if [ "$TIME_PREFIX" != "" ]; then
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --time-prefix \"$TIME_PREFIX\""
+fi
+
+if [ "$TIME_START_COLUMN" != "" ]; then
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --time-start-column \"$TIME_START_COLUMN\""
+fi
+
+if [ "$CADENCE_COLUMN" != "" ]; then
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --cadence-column \"$CADENCE_COLUMN\""
+fi
+
+if [ "$TIME_START_KEY" != "" ]; then
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --time-start-key \"$TIME_START_KEY\""
+fi
+
+if [ "$CADENCE_KEY" != "" ]; then
+	TIME_SERIES_OPTS="$TIME_SERIES_OPTS --cadence-key \"$CADENCE_KEY\""
 fi
 
 SAVE_OPTS="--outfile \"$OUTFILE\""
