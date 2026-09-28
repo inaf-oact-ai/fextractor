@@ -59,6 +59,10 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 				layout=self.preprocessing.layout,
 				value_prefixes=self.preprocessing.value_prefixes,
 				channel_names=self.preprocessing.channel_names,
+				error_prefixes=self.preprocessing.error_prefixes,
+				time_prefix=self.preprocessing.time_prefix,
+				time_start_column=self.preprocessing.time_start_column,
+				cadence_column=self.preprocessing.cadence_column,
 				label_column=self.preprocessing.label_column,
 				metadata_columns=self.preprocessing.metadata_columns,
 			)

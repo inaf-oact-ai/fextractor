@@ -49,6 +49,7 @@ def _get_entry_source(
 		return read_timeseries_record(
 			record=item,
 			value_keys=preprocessing.value_columns,
+			error_keys=preprocessing.error_columns,
 			channel_names=preprocessing.channel_names,
 			time_key=preprocessing.time_column,
 			time_start_key=preprocessing.time_start_key,

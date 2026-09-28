@@ -25,6 +25,11 @@ class TimeSeriesPreprocessConfig:
 	value_prefixes: tuple[str, ...] | None = None
 	channel_names: tuple[str, ...] | None = None
 	
+	error_prefixes: tuple[str, ...] | None = None
+	time_prefix: str | None = None
+	time_start_column: str | None = None
+	cadence_column: str | None = None
+	
 	label_column: str | None = None
 	metadata_columns: tuple[str, ...] | None = None
 	

@@ -150,17 +150,34 @@ def _indexed_columns(
 		for _, name in columns
 	]
 	
+
+####################################
+##   TIME-SERIES - WIDE FORMAT
+####################################
+# - Example CSV for irregularly-sampled time series
+# t0,t1,t2,..., var1_0,var1_1,..., var2_0,var2_1,..., var1_err_0,var1_err_1,...,var2_err_0,var2_err_1,...,
+
+# - Example CSV for regularly-sampled time series
+# t0,cadence, var1_0,var1_1,..., var2_0,var2_1,..., var1_err_0,var1_err_1,...,var2_err_0,var2_err_1,...,
+
+
 def _read_wide_timeseries(
 	table: Table,
 	path: Path,
 	time_column: str | None = None,
+	time_prefix: str | None = None,
+	time_start_column: str | None = None,
+	cadence_column: str | None = None,
 	value_prefixes: Sequence[str] | None = None,
+	error_prefixes: Sequence[str] | None = None,
 	channel_names: Sequence[str] | None = None,
 	label_column: str | None = None,
 	metadata_columns: Sequence[str] | None = None,
 ) -> TimeSeries:
+
 	"""Read one wide/windowed time-series record."""
 
+	# - Validate options
 	if len(table) != 1:
 		raise ValueError(
 			"Wide time-series layout currently expects exactly "
@@ -175,6 +192,17 @@ def _read_wide_timeseries(
 	value_prefixes = tuple(
 		value_prefixes
 	)
+	
+	if error_prefixes is not None:
+		error_prefixes = tuple(
+			error_prefixes
+		)
+
+		if len(error_prefixes) != len(value_prefixes):
+			raise ValueError(
+				"error_prefixes must contain one prefix "
+				"per value prefix"
+			)
 
 	if channel_names is None:
 		channel_names = value_prefixes
@@ -192,6 +220,7 @@ def _read_wide_timeseries(
 
 	row = table[0]
 
+	# - Fill channel columns
 	channel_columns = []
 
 	for prefix in value_prefixes:
@@ -210,6 +239,29 @@ def _read_wide_timeseries(
 			columns
 		)
 
+	# - Fill error channel columns
+	error_channel_columns = None
+
+	if error_prefixes is not None:
+		error_channel_columns = []
+
+		for prefix in error_prefixes:
+			columns = _indexed_columns(
+				table,
+				prefix,
+			)
+
+			if not columns:
+				raise ValueError(
+					f"No wide error columns found "
+					f"with prefix '{prefix}'"
+				)
+
+			error_channel_columns.append(
+				columns
+			)
+
+	# - Validate length
 	lengths = {
 		len(columns)
 		for columns in channel_columns
@@ -220,9 +272,116 @@ def _read_wide_timeseries(
 			"Wide time-series channels have different lengths: "
 			f"{sorted(lengths)}"
 		)
-
+	
+	# - Fill time columns
 	n_time = lengths.pop()
+	times = None
 
+	if time_prefix is not None:
+		time_columns = _indexed_columns(
+			table,
+			time_prefix,
+		)
+
+		if not time_columns:
+			raise ValueError(
+				f"No wide time columns found "
+				f"with prefix '{time_prefix}'"
+			)
+
+		if len(time_columns) != n_time:
+			raise ValueError(
+				"Wide time-column length does not match "
+				f"value-channel length: "
+				f"{len(time_columns)} != {n_time}"
+			)
+
+		times = np.asarray(
+			[
+				row[name]
+				for name in time_columns
+			],
+			dtype=np.float64,
+		)
+
+	elif (
+		time_start_column is not None
+		or cadence_column is not None
+	):
+		if (
+			time_start_column is None
+			or cadence_column is None
+		):
+			raise ValueError(
+				"time_start_column and cadence_column "
+				"must be supplied together"
+			)
+
+		if time_start_column not in table.colnames:
+			raise KeyError(
+				f"Column '{time_start_column}' not found"
+			)
+
+		if cadence_column not in table.colnames:
+			raise KeyError(
+				f"Column '{cadence_column}' not found"
+			)
+
+		time_start = float(
+			row[time_start_column]
+		)
+
+		cadence = float(
+			row[cadence_column]
+		)
+
+		if not np.isfinite(
+			time_start
+		):
+			raise ValueError(
+				"Wide time start must be finite"
+			)
+
+		if (
+			not np.isfinite(cadence)
+			or cadence <= 0
+		):
+			raise ValueError(
+				f"Wide cadence must be positive and finite, "
+				f"got {cadence}"
+			)
+
+		times = (
+			time_start
+			+ np.arange(
+				n_time,
+				dtype=np.float64,
+			)
+			* cadence
+		)
+
+	# - Validate error length	
+	if error_channel_columns is not None:
+		error_lengths = {
+			len(columns)
+			for columns in error_channel_columns
+		}
+
+		if len(error_lengths) != 1:
+			raise ValueError(
+				"Wide error channels have different lengths: "
+				f"{sorted(error_lengths)}"
+			)
+
+		error_length = error_lengths.pop()
+
+		if error_length != n_time:
+			raise ValueError(
+				"Wide error-channel length does not match "
+				f"value-channel length: {error_length} != {n_time}"
+			)	
+
+	# - Fill values
 	values = np.empty(
 		(
 			n_time,
@@ -245,6 +404,34 @@ def _read_wide_timeseries(
 			dtype=np.float32,
 		)
 
+
+	# - Fill errors
+	errors = None
+	
+	if error_channel_columns is not None:
+		errors = np.empty(
+			(
+				n_time,
+				len(error_channel_columns),
+			),
+			dtype=np.float32,
+		)
+
+		for channel_index, columns in enumerate(
+			error_channel_columns
+		):
+			errors[
+				:,
+				channel_index,
+			] = np.asarray(
+				[
+					row[name]
+					for name in columns
+				],
+				dtype=np.float32,
+			)
+
+	# - Fill metadata
 	metadata = {
 		"source": str(path),
 		"layout": "wide",
@@ -253,6 +440,9 @@ def _read_wide_timeseries(
 		),
 	}
 
+	# Legacy scalar time metadata. This does not define the
+	# per-sample time coordinate; use time_prefix or
+	# time_start_column + cadence_column for that.
 	if time_column is not None:
 		if time_column not in table.colnames:
 			raise KeyError(
@@ -292,16 +482,18 @@ def _read_wide_timeseries(
 
 	return TimeSeries(
 		values=values,
-		times=None,
+		times=times,
+		errors=errors,
 		channel_names=tuple(
 			channel_names
 		),
 		metadata=metadata,
-	)	
+	)
 	
 def read_timeseries_record(
 	record: dict[str, Any],
 	value_keys: Sequence[str],
+	error_keys: Sequence[str] | None = None,
 	channel_names: Sequence[str] | None = None,
 	time_key: str | None = None,
 	time_start_key: str | None = None,
@@ -317,6 +509,17 @@ def read_timeseries_record(
 	value_keys = tuple(
 		value_keys
 	)
+	
+	if error_keys is not None:
+		error_keys = tuple(
+			error_keys
+		)
+
+		if len(error_keys) != len(value_keys):
+			raise ValueError(
+				"error_keys must contain one field "
+				"per value field"
+			)
 
 	if channel_names is None:
 		channel_names = value_keys
@@ -370,6 +573,45 @@ def read_timeseries_record(
 	values = np.column_stack(
 		arrays
 	)
+	
+	errors = None
+
+	if error_keys is not None:
+		error_arrays = []
+
+		for key in error_keys:
+			if key not in record:
+				raise KeyError(
+					f"Time-series error field '{key}' "
+					"not found in record"
+				)
+
+			array = np.asarray(
+				record[key],
+				dtype=np.float32,
+			)
+
+			if array.ndim != 1:
+				raise ValueError(
+					f"Time-series error field '{key}' "
+					"must be one-dimensional, "
+					f"got shape {array.shape}"
+				)
+
+			if len(array) != n_time:
+				raise ValueError(
+					f"Time-series error field '{key}' "
+					f"has length {len(array)}, "
+					f"expected {n_time}"
+				)
+
+			error_arrays.append(
+				array
+			)
+
+		errors = np.column_stack(
+			error_arrays
+		)
 
 	times = None
 
@@ -447,9 +689,24 @@ def read_timeseries_record(
 		value_keys
 	)
 
+	if error_keys is not None:
+		excluded.update(
+			error_keys
+		)
+
 	if time_key is not None:
 		excluded.add(
 			time_key
+		)
+
+	if time_start_key is not None:
+		excluded.add(
+			time_start_key
+		)
+
+	if cadence_key is not None:
+		excluded.add(
+			cadence_key
 		)
 
 	for key, value in record.items():
@@ -470,15 +727,18 @@ def read_timeseries_record(
 				key
 			] = value
 
+	
 	return TimeSeries(
 		values=values,
 		times=times,
+		errors=errors,
 		channel_names=tuple(
 			channel_names
 		),
 		metadata=metadata,
-	)	
+	)
 	
+
 def read_timeseries(
 	filename: str | Path,
 	time_column: str | None = None,
@@ -486,10 +746,15 @@ def read_timeseries(
 	error_columns: Sequence[str] | None = None,
 	layout: str = "long",
 	value_prefixes: Sequence[str] | None = None,
+	error_prefixes: Sequence[str] | None = None,
+	time_prefix: str | None = None,
+	time_start_column: str | None = None,
+	cadence_column: str | None = None,
 	channel_names: Sequence[str] | None = None,
 	label_column: str | None = None,
 	metadata_columns: Sequence[str] | None = None,
 ) -> TimeSeries:
+
 	"""Read one time series from a supported file."""
 
 	path = Path(filename)
@@ -552,7 +817,11 @@ def read_timeseries(
 			table=table,
 			path=path,
 			time_column=time_column,
+			time_prefix=time_prefix,
+			time_start_column=time_start_column,
+			cadence_column=cadence_column,
 			value_prefixes=value_prefixes,
+			error_prefixes=error_prefixes,
 			channel_names=channel_names,
 			label_column=label_column,
 			metadata_columns=metadata_columns,
