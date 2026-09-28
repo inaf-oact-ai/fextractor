@@ -1524,41 +1524,46 @@ def extract_channel(
 			)
 		)
 
-	if not np.all(
-		np.isfinite(
-			feature_values
-		)
-	):
-		bad_features = []
 
-		for (
-			name,
-			value,
-		) in zip(
+	bad_features = [
+		name
+		for name, value in zip(
 			feature_names,
 			feature_values,
-		):
-			if not np.isfinite(
-				value
-			):
-				bad_features.append(
-					name
-				)
+		)
+		if not np.isfinite(
+			value
+		)
+	]
 
-		raise RuntimeError(
-			"FATS returned non-finite feature "
-			"value(s): %s"
+	if bad_features:
+		print(
+			"WARNING: Replacing non-finite FATS feature "
+			"value(s) with 0: %s"
 			% ", ".join(
 				bad_features
 			)
 		)
 
+		feature_values = np.asarray(
+			feature_values,
+			dtype=np.float64,
+		)
+
+		feature_values[
+			~np.isfinite(
+				feature_values
+			)
+		] = 0.0
+
 	return (
 		feature_names,
 		feature_values,
+		bad_features,
 	)
+	
 
-
+	
 
 def extract_features(
 	channels,
@@ -1634,12 +1639,13 @@ def extract_features(
 		(
 			names,
 			features,
+			invalid_features,
 		) = extract_channel(
 			values=values,
 			time=time,
 			errors=errors,
 		)
-
+		
 		channel_feature_names = [
 			"%s.%s"
 			% (
@@ -1673,6 +1679,9 @@ def extract_features(
 			),
 			"n_features": int(
 				len(features)
+			),
+			"invalid_features": list(
+				invalid_features
 			),
 		})
 
