@@ -14,6 +14,7 @@ def test_backends_are_registered():
 		"siglip",
 		"siglip2",
 		"chronos2",
+		"moirai2",
 	)
 	
 def test_backend_modality():
@@ -26,6 +27,7 @@ def test_timeseries_backend_is_registered():
 		modality="timeseries",
 	) == (
 		"chronos2",
+		"moirai2",
 	)
 
 
@@ -38,7 +40,7 @@ def test_registered_modalities():
 
 def test_chronos_alias():
 	spec = get_backend_spec(
-		"chronos"
+		"chronos",
 	)
 
 	assert spec.name == "chronos2"

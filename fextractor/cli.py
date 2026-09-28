@@ -81,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--context-length", type=int, default=None, help="Optional backend context length")
 	parser.add_argument("--batch-size", type=int, default=None, help="Backend embedding batch size")
 	
+	parser.add_argument("--time-transform", choices=("none", "origin"), default=None, help="Time-coordinate transform")
+	parser.add_argument("--value-transform", choices=("none", "maxabs", "minmax", "standard", "asinh"), default=None, help="Channel-wise value transform")
+	parser.add_argument("--value-transform-scale", type=float, default=None, help="Optional scale parameter used by value transforms such as asinh")
+	parser.add_argument("--alignment", choices=("none", "peak-max", "peak-min", "peak-abs"), default=None, help="Feature used as temporal alignment anchor")
+	parser.add_argument("--alignment-window-before", type=float, default=None, help="Physical time to retain before the alignment anchor. If None, align and keep the entire series.")
+	parser.add_argument("--alignment-window-after", type=float, default=None, help="Physical time to retain after the alignment anchor. If None, align and keep the entire series.")
+	parser.add_argument("--bin-aggregation", choices=("mean", "inverse-variance"), default=None, help="Aggregation used when multiple observations fall in one time bin")
+	
 	# - MOIRAI OPTIONS
 	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
 	parser.add_argument("--token-order", choices=("by_variate", "interleave_time"), default=None, help="Moirai-2 token ordering for time_variate patching. If omitted, backend default is used.")
@@ -250,6 +258,42 @@ def _resolve_timeseries_preprocessing(
 			args.cadence_key
 		)
 
+	if args.time_transform is not None:
+		changes["time_transform"] = (
+			args.time_transform
+		)
+
+	if args.value_transform is not None:
+		changes["value_transform"] = (
+			args.value_transform
+		)
+
+	if args.value_transform_scale is not None:
+		changes["value_transform_scale"] = (
+			args.value_transform_scale
+		)
+		
+	if args.alignment is not None:
+		changes["alignment"] = (
+			args.alignment
+		)
+
+	if args.alignment_window_before is not None:
+		changes["alignment_window_before"] = (
+			args.alignment_window_before
+		)
+
+	if args.alignment_window_after is not None:
+		changes["alignment_window_after"] = (
+			args.alignment_window_after
+		)	
+
+	if args.bin_aggregation is not None:
+		changes["bin_aggregation"] = (
+			args.bin_aggregation
+		)
+
+	# - Update config
 	config_data = base.__dict__.copy()
 	config_data.update(
 		changes

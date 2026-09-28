@@ -14,6 +14,7 @@ def test_list_backends():
 		"siglip",
 		"siglip2",
 		"chronos2",
+		"moirai2",
 	)
 
 	assert list_backends() == expected
@@ -33,6 +34,7 @@ def test_list_backends():
 		modality="timeseries",
 	) == (
 		"chronos2",
+		"moirai2",
 	)
 
 

@@ -6,6 +6,10 @@ import numpy as np
 
 from .data import TimeSeries
 
+SUPPORTED_BIN_AGGREGATIONS = (
+	"mean",
+	"inverse-variance",
+)
 
 def infer_cadence(
 	times: np.ndarray,
@@ -87,11 +91,33 @@ def is_regular_timeseries(
 def _linear_fill(
 	values: np.ndarray,
 	observed_mask: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-	"""Fill internal gaps by linear interpolation."""
+	errors: np.ndarray | None = None,
+) -> tuple[
+	np.ndarray,
+	np.ndarray | None,
+	np.ndarray,
+]:
+	"""Fill internal gaps by linear interpolation.
+
+	Only gaps between observed samples are filled. Values outside the
+	first/last observed samples are left unchanged.
+
+	Measurement errors are propagated assuming independent uncertainties
+	on the two samples bracketing each interpolated point.
+	"""
 
 	output = values.copy()
-	mask = observed_mask.copy()
+
+	output_errors = (
+		None
+		if errors is None
+		else errors.copy()
+	)
+
+	interpolated_mask = np.zeros(
+		values.shape,
+		dtype=bool,
+	)
 
 	x = np.arange(
 		values.shape[0],
@@ -102,7 +128,7 @@ def _linear_fill(
 		values.shape[1]
 	):
 		valid = (
-			mask[:, channel]
+			observed_mask[:, channel]
 			& np.isfinite(
 				output[:, channel]
 			)
@@ -129,6 +155,7 @@ def _linear_fill(
 		):
 			continue
 
+		# - Interpolate values
 		output[
 			fill_region,
 			channel,
@@ -141,27 +168,99 @@ def _linear_fill(
 			],
 		)
 
-		mask[
+		interpolated_mask[
 			fill_region,
 			channel,
 		] = True
 
+		# - Propagate measurement errors
+		if output_errors is not None:
+			for target_index in np.flatnonzero(
+				fill_region
+			):
+				left_candidates = valid_indices[
+					valid_indices < target_index
+				]
+
+				right_candidates = valid_indices[
+					valid_indices > target_index
+				]
+
+				if (
+					left_candidates.size == 0
+					or right_candidates.size == 0
+				):
+					continue
+
+				left = int(
+					left_candidates[-1]
+				)
+
+				right = int(
+					right_candidates[0]
+				)
+
+				error_left = output_errors[
+					left,
+					channel,
+				]
+
+				error_right = output_errors[
+					right,
+					channel,
+				]
+
+				if (
+					not np.isfinite(error_left)
+					or not np.isfinite(error_right)
+				):
+					continue
+
+				alpha = (
+					(target_index - left)
+					/ (right - left)
+				)
+
+				output_errors[
+					target_index,
+					channel,
+				] = np.sqrt(
+					(1.0 - alpha) ** 2
+					* error_left ** 2
+					+ alpha ** 2
+					* error_right ** 2
+				)
+
 	return (
 		output,
-		mask,
+		output_errors,
+		interpolated_mask,
 	)
+
 
 
 def regularize_timeseries(
 	series: TimeSeries,
 	cadence: float | None = None,
 	missing_strategy: str = "nan",
+	grid_start: float | None = None,
+	grid_stop: float | None = None,
+	bin_aggregation: str = "mean",
 ) -> TimeSeries:
 	"""Project an irregular time series onto a regular temporal grid.
 
-	Multiple observations assigned to the same grid point are averaged.
+	Multiple observations assigned to the same grid point are aggregated
+	according to ``bin_aggregation``.
+
 	Missing grid points can either remain NaN or be linearly interpolated.
 	"""
+
+	if bin_aggregation not in SUPPORTED_BIN_AGGREGATIONS:
+		raise ValueError(
+			f"Unsupported bin_aggregation '{bin_aggregation}'. "
+			f"Supported values: "
+			f"{', '.join(SUPPORTED_BIN_AGGREGATIONS)}"
+		)
 
 	if series.times is None:
 		raise ValueError(
@@ -197,21 +296,74 @@ def regularize_timeseries(
 			"Timestamps contain non-finite values"
 		)
 
-	start = float(
-		times.min()
+	# - Resolve regularization bounds
+	if grid_start is None:
+		start = float(
+			times.min()
+		)
+
+	else:
+		start = float(
+			grid_start
+		)
+
+	if grid_stop is None:
+		stop = float(
+			times.max()
+		)
+
+	else:
+		stop = float(
+			grid_stop
+		)
+
+	if not np.isfinite(start):
+		raise ValueError(
+			f"Grid start must be finite, got {start}"
+		)
+
+	if not np.isfinite(stop):
+		raise ValueError(
+			f"Grid stop must be finite, got {stop}"
+		)
+
+	if stop < start:
+		raise ValueError(
+			f"Grid stop ({stop}) must be greater than "
+			f"or equal to grid start ({start})"
+		)
+
+	# - Construct regular grid
+	span = (
+		stop
+		- start
 	)
 
-	stop = float(
-		times.max()
+	n_intervals_float = (
+		span
+		/ cadence
 	)
+
+	n_intervals = int(
+		np.round(
+			n_intervals_float
+		)
+	)
+
+	if not np.isclose(
+		n_intervals_float,
+		n_intervals,
+		rtol=1.0e-9,
+		atol=1.0e-12,
+	):
+		raise ValueError(
+			"Regularization grid span must be an integer "
+			"multiple of cadence: "
+			f"start={start}, stop={stop}, cadence={cadence}"
+		)
 
 	n_grid = (
-		int(
-			np.round(
-				(stop - start)
-				/ cadence
-			)
-		)
+		n_intervals
 		+ 1
 	)
 
@@ -228,6 +380,7 @@ def regularize_timeseries(
 		series.n_variates
 	)
 
+	# - Common bin accumulators
 	sums = np.zeros(
 		(
 			n_grid,
@@ -244,11 +397,12 @@ def regularize_timeseries(
 		dtype=np.int64,
 	)
 
-	error_sums = None
+	# - Error accumulators for arithmetic mean
+	error_variance_sums = None
 	error_counts = None
 
 	if series.errors is not None:
-		error_sums = np.zeros(
+		error_variance_sums = np.zeros(
 			(
 				n_grid,
 				n_variates,
@@ -264,6 +418,34 @@ def regularize_timeseries(
 			dtype=np.int64,
 		)
 
+	# - Accumulators for inverse-variance aggregation
+	weighted_sums = None
+	weight_sums = None
+
+	if bin_aggregation == "inverse-variance":
+		if series.errors is None:
+			raise ValueError(
+				"bin_aggregation='inverse-variance' "
+				"requires measurement errors"
+			)
+
+		weighted_sums = np.zeros(
+			(
+				n_grid,
+				n_variates,
+			),
+			dtype=np.float64,
+		)
+
+		weight_sums = np.zeros(
+			(
+				n_grid,
+				n_variates,
+			),
+			dtype=np.float64,
+		)
+
+	# - Assign samples to nearest grid point
 	indices = np.rint(
 		(times - start)
 		/ cadence
@@ -274,6 +456,8 @@ def regularize_timeseries(
 	valid_index = (
 		(indices >= 0)
 		& (indices < n_grid)
+		& (times >= start)
+		& (times <= stop)
 	)
 
 	for source_index in np.flatnonzero(
@@ -302,6 +486,7 @@ def regularize_timeseries(
 			):
 				continue
 
+			# - Always count the observed sample
 			sums[
 				grid_index,
 				channel,
@@ -312,25 +497,59 @@ def regularize_timeseries(
 				channel,
 			] += 1
 
+			# - Handle errors / weighted aggregation
 			if series.errors is not None:
 				error = series.errors[
 					source_index,
 					channel,
 				]
 
-				if np.isfinite(
-					error
-				):
-					error_sums[
+				if bin_aggregation == "mean":
+					if np.isfinite(
+						error
+					):
+						error_variance_sums[
+							grid_index,
+							channel,
+						] += (
+							error ** 2
+						)
+
+						error_counts[
+							grid_index,
+							channel,
+						] += 1
+
+				elif bin_aggregation == "inverse-variance":
+					if (
+						not np.isfinite(error)
+						or error <= 0
+					):
+						raise ValueError(
+							"inverse-variance aggregation requires "
+							"finite positive errors for all "
+							"observed values"
+						)
+
+					weight = (
+						1.0
+						/ error ** 2
+					)
+
+					weighted_sums[
 						grid_index,
 						channel,
-					] += error
+					] += (
+						weight
+						* value
+					)
 
-					error_counts[
+					weight_sums[
 						grid_index,
 						channel,
-					] += 1
+					] += weight
 
+	# - Allocate output arrays
 	values = np.full(
 		(
 			n_grid,
@@ -344,17 +563,12 @@ def regularize_timeseries(
 		counts > 0
 	)
 
-	values[
-		observed_mask
-	] = (
-		sums[
-			observed_mask
-		]
-		/ counts[
-			observed_mask
-		]
-	).astype(
-		np.float32
+	interpolated_mask = np.zeros(
+		(
+			n_grid,
+			n_variates,
+		),
+		dtype=bool,
 	)
 
 	errors = None
@@ -369,33 +583,86 @@ def regularize_timeseries(
 			dtype=np.float32,
 		)
 
-		valid_errors = (
-			error_counts > 0
-		)
-
-		errors[
-			valid_errors
+	# - Aggregate values and uncertainties
+	if bin_aggregation == "mean":
+		values[
+			observed_mask
 		] = (
-			error_sums[
-				valid_errors
+			sums[
+				observed_mask
 			]
-			/ error_counts[
-				valid_errors
+			/ counts[
+				observed_mask
 			]
 		).astype(
 			np.float32
 		)
 
+		if errors is not None:
+			valid_errors = (
+				(error_counts > 0)
+				& (error_counts == counts)
+			)
+
+			errors[
+				valid_errors
+			] = (
+				np.sqrt(
+					error_variance_sums[
+						valid_errors
+					]
+				)
+				/ counts[
+					valid_errors
+				]
+			).astype(
+				np.float32
+			)
+
+	elif bin_aggregation == "inverse-variance":
+		valid_weights = (
+			weight_sums > 0
+		)
+
+		values[
+			valid_weights
+		] = (
+			weighted_sums[
+				valid_weights
+			]
+			/ weight_sums[
+				valid_weights
+			]
+		).astype(
+			np.float32
+		)
+
+		errors[
+			valid_weights
+		] = (
+			1.0
+			/ np.sqrt(
+				weight_sums[
+					valid_weights
+				]
+			)
+		).astype(
+			np.float32
+		)
+
+	# - Handle missing grid cells
 	if missing_strategy == "nan":
 		pass
 
 	elif missing_strategy == "linear":
 		(
 			values,
-			observed_mask,
+			errors,
+			interpolated_mask,
 		) = _linear_fill(
 			values,
 			observed_mask,
+			errors=errors,
 		)
 
 	else:
@@ -405,6 +672,7 @@ def regularize_timeseries(
 			"Supported values: nan, linear"
 		)
 
+	# - Fill metadata
 	metadata = (
 		series.metadata.copy()
 	)
@@ -413,13 +681,45 @@ def regularize_timeseries(
 		"regularized": True,
 		"cadence": cadence,
 		"missing_strategy": missing_strategy,
+		"bin_aggregation": bin_aggregation,
+		"regularization_grid_start": start,
+		"regularization_grid_stop": stop,
+		"regularization_grid_size": n_grid,
 	})
+
+	if (
+		"alignment_anchor_time_aligned"
+		in metadata
+	):
+		anchor_matches = np.flatnonzero(
+			np.isclose(
+				grid,
+				0.0,
+				rtol=1.0e-9,
+				atol=1.0e-12,
+			)
+		)
+
+		if anchor_matches.size != 1:
+			raise ValueError(
+				"Aligned regularization grid must contain "
+				"exactly one t=0 anchor bin"
+			)
+
+		metadata[
+			"alignment_anchor_index_aligned"
+		] = int(
+			anchor_matches[0]
+		)
 
 	return TimeSeries(
 		values=values,
 		times=grid,
 		observed_mask=observed_mask,
+		interpolated_mask=interpolated_mask,
 		errors=errors,
 		channel_names=series.channel_names,
 		metadata=metadata,
 	)
+	
+

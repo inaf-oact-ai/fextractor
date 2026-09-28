@@ -8,6 +8,13 @@ from fextractor.timeseries import (
 	regularize_timeseries,
 )
 
+from fextractor.preprocessing import (
+	TimeSeriesPreprocessConfig,
+	apply_timeseries_preprocessing,
+	get_profile,
+)
+
+
 
 def test_infer_cadence():
 	times = np.asarray([
@@ -207,3 +214,229 @@ def test_regularization_averages_duplicate_grid_samples():
 	assert output.values[1, 0] == pytest.approx(
 		20.0
 	)
+	
+	
+def test_regularization_explicit_grid_bounds():
+	series = TimeSeries(
+		times=np.asarray([
+			-2.0,
+			0.0,
+			2.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+			5.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		grid_start=-4.0,
+		grid_stop=4.0,
+	)
+
+	np.testing.assert_allclose(
+		output.times,
+		[
+			-4.0,
+			-3.0,
+			-2.0,
+			-1.0,
+			0.0,
+			1.0,
+			2.0,
+			3.0,
+			4.0,
+		],
+	)
+
+	assert output.values.shape == (
+		9,
+		1,
+	)
+
+	assert np.isnan(
+		output.values[0, 0]
+	)
+
+	assert np.isnan(
+		output.values[-1, 0]
+	)
+
+	assert (
+		output.observed_mask[:, 0].tolist()
+		== [
+			False,
+			False,
+			True,
+			False,
+			True,
+			False,
+			True,
+			False,
+			False,
+		]
+	)	
+	
+	
+def test_alignment_regularization_produces_fixed_anchor_bin():
+	series = TimeSeries(
+		times=np.asarray([
+			59015.0,
+			59018.0,
+			59020.0,
+			59024.0,
+		]),
+		values=np.asarray([
+			1.0,
+			4.0,
+			10.0,
+			3.0,
+		]),
+	)
+
+	config = TimeSeriesPreprocessConfig(
+		alignment="peak-max",
+		alignment_window_before=5.0,
+		alignment_window_after=5.0,
+		regularize=True,
+		cadence=1.0,
+		missing_strategy="nan",
+	)
+
+	output = apply_timeseries_preprocessing(
+		series,
+		config,
+	)
+
+	np.testing.assert_allclose(
+		output.times,
+		np.arange(
+			-5.0,
+			6.0,
+			1.0,
+		),
+	)
+
+	assert (
+		output.metadata[
+			"alignment_anchor_index_aligned"
+		]
+		== 5
+	)
+
+	assert (
+		output.values.shape
+		== (
+			11,
+			1,
+		)
+	)
+
+	assert (
+		output.values[5, 0]
+		== 10.0
+	)
+	
+def test_alignment_window_after_must_match_cadence():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			1.0,
+			2.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+			2.0,
+		]),
+	)
+
+	config = TimeSeriesPreprocessConfig(
+		alignment="peak-max",
+		alignment_window_before=1.0,
+		alignment_window_after=1.5,
+		regularize=True,
+		cadence=1.0,
+	)
+
+	with pytest.raises(
+		ValueError,
+		match="alignment_window_after",
+	):
+		apply_timeseries_preprocessing(
+			series,
+			config,
+		)
+		
+def test_regularization_does_not_bin_samples_outside_grid():
+	series = TimeSeries(
+		times=np.asarray([
+			-5.4,
+			-5.0,
+			0.0,
+			5.0,
+			5.4,
+		]),
+		values=np.asarray([
+			100.0,
+			1.0,
+			2.0,
+			3.0,
+			200.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		grid_start=-5.0,
+		grid_stop=5.0,
+	)
+
+	assert output.values[0, 0] == pytest.approx(
+		1.0
+	)
+
+	assert output.values[-1, 0] == pytest.approx(
+		3.0
+	)
+	
+	
+def test_linear_interpolation_preserves_observed_mask():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			2.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		missing_strategy="linear",
+	)
+
+	assert output.observed_mask[:, 0].tolist() == [
+		True,
+		False,
+		True,
+	]
+
+	assert output.interpolated_mask[:, 0].tolist() == [
+		False,
+		True,
+		False,
+	]
+
+	assert output.values[1, 0] == pytest.approx(
+		2.0
+	)
+	
+	

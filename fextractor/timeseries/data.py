@@ -17,6 +17,7 @@ class TimeSeries:
 	values: np.ndarray
 	times: np.ndarray | None = None
 	observed_mask: np.ndarray | None = None
+	interpolated_mask: np.ndarray | None = None
 	errors: np.ndarray | None = None
 	channel_names: tuple[str, ...] | None = None
 	metadata: dict = field(default_factory=dict)
@@ -81,6 +82,46 @@ class TimeSeries:
 				& np.isfinite(values)
 			)
 
+
+
+		if self.interpolated_mask is None:
+			self.interpolated_mask = np.zeros(
+				values.shape,
+				dtype=bool,
+			)
+
+		else:
+			interpolated_mask = np.asarray(
+				self.interpolated_mask,
+				dtype=bool,
+			)
+
+			if interpolated_mask.ndim == 1:
+				interpolated_mask = (
+					interpolated_mask[:, None]
+				)
+
+			if interpolated_mask.shape != values.shape:
+				raise ValueError(
+					"interpolated_mask shape does not match values: "
+					f"{interpolated_mask.shape} != {values.shape}"
+				)
+
+			self.interpolated_mask = (
+				interpolated_mask
+				& np.isfinite(values)
+			)
+
+
+		if np.any(
+			self.observed_mask
+			& self.interpolated_mask
+		):
+			raise ValueError(
+				"A sample cannot be both observed and interpolated"
+			)
+
+
 		if self.errors is not None:
 			errors = np.asarray(
 				self.errors,
@@ -132,6 +173,7 @@ class TimeSeries:
 				else self.times.copy()
 			),
 			observed_mask=self.observed_mask.copy(),
+			interpolated_mask=self.interpolated_mask.copy(),
 			errors=(
 				None
 				if self.errors is None
