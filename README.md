@@ -1,3 +1,7 @@
+<p align="left">
+  <img src="share/logo_fextractor.png" alt="fextractor logo" width="320"/>
+</p>
+
 # fextractor
 
 `fextractor` is a lightweight Python package for extracting feature vectors / learned representations from pretrained machine-learning models.
