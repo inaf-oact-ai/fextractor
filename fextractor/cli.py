@@ -87,8 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--alignment", choices=("none", "peak-max", "peak-min", "peak-abs"), default=None, help="Feature used as temporal alignment anchor")
 	parser.add_argument("--alignment-window-before", type=float, default=None, help="Physical time to retain before the alignment anchor. If None, align and keep the entire series.")
 	parser.add_argument("--alignment-window-after", type=float, default=None, help="Physical time to retain after the alignment anchor. If None, align and keep the entire series.")
+	
 	parser.add_argument("--bin-aggregation", choices=("mean", "inverse-variance"), default=None, help="Aggregation used when multiple observations fall in one time bin")
-	parser.add_argument("--regularization-method", choices=("bin"), default=None, help="Time-series regularization method")
+	parser.add_argument("--regularization-method", choices=("bin", "gp"), default=None, help="Time-series regularization method")
+	parser.add_argument("--gp-sigma", type=float, default=None, help="Gaussian Process Matern-3/2 kernel amplitude. If omitted, inferred independently per channel.")
+	parser.add_argument("--gp-rho", type=float, default=None, help="Gaussian Process Matern-3/2 correlation length scale in timestamp units. If omitted, inferred independently per channel.")
+	parser.add_argument("--gp-jitter", type=float, default=None, help="Gaussian Process noise floor used when measurement errors are unavailable.")	
 	
 	# - MOIRAI OPTIONS
 	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
@@ -98,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
 	parser.add_argument("--value-prefixes", nargs="+", default=None, help="Wide-layout time-series column prefixes")
 	parser.add_argument("--channel-names", nargs="+", default=None, help="Wide-layout channel names")
+	parser.add_argument("--error-prefixes", nargs="+", default=None, help="Wide-layout time-series uncertainty/error prefixes")
+	parser.add_argument("--time-prefix", default=None, help="Prefix of indexed timestamp columns for irregular wide-layout input")
+	parser.add_argument("--time-start-column", default=None, help="Column containing the initial timestamp for regular wide-layout input")
+	parser.add_argument("--cadence-column", default=None, help="Column containing the sampling cadence for regular wide-layout input")
 	parser.add_argument("--label-column", default=None, help="Optional sample-level label column")
 	parser.add_argument("--metadata-columns", nargs="+", default=None, help="Additional sample-level metadata columns")
 	parser.add_argument("--time-start-key", default=None, help="Inline JSON field containing the start timestamp")
@@ -238,6 +246,26 @@ def _resolve_timeseries_preprocessing(
 		changes["channel_names"] = tuple(
 			args.channel_names
 		)
+		
+	if args.error_prefixes is not None:
+		changes["error_prefixes"] = tuple(
+			args.error_prefixes
+		)
+
+	if args.time_prefix is not None:
+		changes["time_prefix"] = (
+			args.time_prefix
+		)
+
+	if args.time_start_column is not None:
+		changes["time_start_column"] = (
+			args.time_start_column
+		)
+
+	if args.cadence_column is not None:
+		changes["cadence_column"] = (
+			args.cadence_column
+		)
 
 	if args.label_column is not None:
 		changes["label_column"] = (
@@ -297,6 +325,21 @@ def _resolve_timeseries_preprocessing(
 	if args.regularization_method is not None:
 		changes["regularization_method"] = (
 			args.regularization_method
+		)
+
+	if args.gp_sigma is not None:
+		changes["gp_sigma"] = (
+			args.gp_sigma
+		)
+
+	if args.gp_rho is not None:
+		changes["gp_rho"] = (
+			args.gp_rho
+		)
+
+	if args.gp_jitter is not None:
+		changes["gp_jitter"] = (
+			args.gp_jitter
 		)
 
 	# - Update config
