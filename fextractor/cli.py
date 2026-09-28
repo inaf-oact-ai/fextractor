@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--error-columns", nargs="+", default=None, help="Time-series uncertainty column(s)")
 	parser.add_argument("--regularize", action=argparse.BooleanOptionalAction, default=None, help="Regularize timestamps onto a fixed grid")
 	parser.add_argument("--cadence", type=float, default=None, help="Regularization cadence in timestamp units")
-	parser.add_argument("--missing-strategy", choices=("nan", "linear"), default=None, help="Missing-value treatment after regularization")
+	parser.add_argument("--missing-strategy", choices=("nan", "linear", "pchip", "akima", "cubic"), default=None, help="Missing-value treatment after regularization")
 	parser.add_argument("--aggregation", choices=SUPPORTED_AGGREGATIONS, default=None, help="Token aggregation strategy")
 	parser.add_argument("--context-length", type=int, default=None, help="Optional backend context length")
 	parser.add_argument("--batch-size", type=int, default=None, help="Backend embedding batch size")
@@ -88,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--alignment-window-before", type=float, default=None, help="Physical time to retain before the alignment anchor. If None, align and keep the entire series.")
 	parser.add_argument("--alignment-window-after", type=float, default=None, help="Physical time to retain after the alignment anchor. If None, align and keep the entire series.")
 	parser.add_argument("--bin-aggregation", choices=("mean", "inverse-variance"), default=None, help="Aggregation used when multiple observations fall in one time bin")
+	parser.add_argument("--regularization-method", choices=("bin"), default=None, help="Time-series regularization method")
 	
 	# - MOIRAI OPTIONS
 	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
@@ -291,6 +292,11 @@ def _resolve_timeseries_preprocessing(
 	if args.bin_aggregation is not None:
 		changes["bin_aggregation"] = (
 			args.bin_aggregation
+		)
+		
+	if args.regularization_method is not None:
+		changes["regularization_method"] = (
+			args.regularization_method
 		)
 
 	# - Update config

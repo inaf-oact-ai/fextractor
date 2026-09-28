@@ -8,7 +8,9 @@ import numpy as np
 
 from ..timeseries import (
 	TimeSeries,
+	make_regular_grid,
 	regularize_timeseries,
+	regularize_timeseries_gp,
 )
 
 import logging
@@ -33,6 +35,11 @@ SUPPORTED_ALIGNMENTS = (
 	"peak-max",
 	"peak-min",
 	"peak-abs",
+)
+
+SUPPORTED_REGULARIZATION_METHODS = (
+	"bin",
+	"gp",
 )
 
 @dataclass(frozen=True)
@@ -67,6 +74,11 @@ class TimeSeriesPreprocessConfig:
 	alignment_window_after: float | None = None
 	
 	regularize: bool = False
+	regularization_method: str = "bin"
+
+	gp_sigma: float | None = None
+	gp_rho: float | None = None
+	gp_jitter: float | None = None
 	
 	cadence: float | None = None
 	missing_strategy: str = "nan"
@@ -628,6 +640,12 @@ def _apply_alignment(
 			keep
 		]
 	)
+	
+	output.predicted_mask = (
+		output.predicted_mask[
+			keep
+		]
+	)
 
 	if output.errors is not None:
 		output.errors = (
@@ -683,6 +701,12 @@ def apply_timeseries_preprocessing(
 				order
 			]
 		)
+		
+		output.predicted_mask = (
+			output.predicted_mask[
+				order
+			]
+		)
 
 		if output.errors is not None:
 			output.errors = (
@@ -722,6 +746,18 @@ def apply_timeseries_preprocessing(
 	# - Regularize
 	if (
 		config.regularize
+		and config.regularization_method
+		not in SUPPORTED_REGULARIZATION_METHODS
+	):
+		raise ValueError(
+			f"Unsupported regularization_method "
+			f"'{config.regularization_method}'. "
+			f"Supported values: "
+			f"{', '.join(SUPPORTED_REGULARIZATION_METHODS)}"
+		)
+		
+	if (
+		config.regularize
 		and config.alignment != "none"
 		and config.cadence is not None
 	):
@@ -759,7 +795,7 @@ def apply_timeseries_preprocessing(
 				"falls on an exact regular-grid bin"
 			)
 			
-			
+	# - Finally regularize
 	if config.regularize:
 		grid_start = None
 		grid_stop = None
@@ -780,15 +816,50 @@ def apply_timeseries_preprocessing(
 				config.alignment_window_after
 			)
 
-		output = regularize_timeseries(
-			output,
-			cadence=config.cadence,
-			missing_strategy=config.missing_strategy,
-			grid_start=grid_start,
-			grid_stop=grid_stop,
-			bin_aggregation=config.bin_aggregation,
-		)
+		# - Bin regularization mode
+		if config.regularization_method == "bin":
+			output = regularize_timeseries(
+				output,
+				cadence=config.cadence,
+				missing_strategy=config.missing_strategy,
+				grid_start=grid_start,
+				grid_stop=grid_stop,
+				bin_aggregation=config.bin_aggregation,
+			)
 
+		# - Gaussian Process regularization mode
+		elif config.regularization_method == "gp":
+			if config.cadence is None:
+				raise ValueError(
+					"GP regularization currently requires "
+					"an explicit cadence"
+				)
+
+			if grid_start is None:
+				grid_start = float(
+					output.times.min()
+				)
+
+			if grid_stop is None:
+				grid_stop = float(
+					output.times.max()
+				)
+
+			grid = make_regular_grid(
+				start=grid_start,
+				stop=grid_stop,
+				cadence=config.cadence,
+			)
+
+			output = regularize_timeseries_gp(
+				output,
+				grid=grid,
+				sigma=config.gp_sigma,
+				rho=config.gp_rho,
+				jitter=config.gp_jitter,
+			)
+	
+	
 	return output
 
 

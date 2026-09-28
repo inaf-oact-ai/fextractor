@@ -14,7 +14,13 @@ from fextractor.preprocessing import (
 	get_profile,
 )
 
+from fextractor.timeseries.regularization import (
+	make_regular_grid,
+)
 
+from fextractor.timeseries.gp import (
+	regularize_timeseries_gp,
+)
 
 def test_infer_cadence():
 	times = np.asarray([
@@ -145,6 +151,172 @@ def test_regularize_with_linear_interpolation():
 		],
 	)
 
+	assert output.observed_mask[:, 0].tolist() == [
+		True,
+		True,
+		False,
+		False,
+		True,
+	]
+
+	assert output.interpolated_mask[:, 0].tolist() == [
+		False,
+		False,
+		True,
+		True,
+		False,
+	]
+
+
+def test_regularize_with_pchip_interpolation():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			1.0,
+			4.0,
+		]),
+		values=np.asarray([
+			1.0,
+			2.0,
+			5.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		missing_strategy="pchip",
+	)
+
+	assert np.all(
+		np.isfinite(
+			output.values[
+				1:5,
+				0,
+			]
+		)
+	)
+
+	assert output.interpolated_mask[:, 0].tolist() == [
+		False,
+		False,
+		True,
+		True,
+		False,
+	]
+	
+def test_regularize_with_akima_interpolation():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			1.0,
+			3.0,
+			5.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+			2.0,
+			4.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		missing_strategy="akima",
+	)
+
+	assert np.isfinite(
+		output.values[2, 0]
+	)
+
+	assert np.isfinite(
+		output.values[4, 0]
+	)
+
+	assert output.interpolated_mask[2, 0]
+	assert output.interpolated_mask[4, 0]
+	
+	
+def test_regularize_with_cubic_interpolation():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			1.0,
+			3.0,
+			5.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+			2.0,
+			4.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		missing_strategy="cubic",
+	)
+
+	assert np.isfinite(
+		output.values[2, 0]
+	)
+
+	assert np.isfinite(
+		output.values[4, 0]
+	)
+
+	assert output.interpolated_mask[2, 0]
+	assert output.interpolated_mask[4, 0]
+	
+def test_interpolation_does_not_extrapolate():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			2.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		grid_start=-2.0,
+		grid_stop=4.0,
+		missing_strategy="pchip",
+	)
+
+	assert np.isnan(
+		output.values[0, 0]
+	)
+
+	assert np.isnan(
+		output.values[1, 0]
+	)
+
+	assert np.isnan(
+		output.values[-1, 0]
+	)
+
+	assert np.isnan(
+		output.values[-2, 0]
+	)
+
+	assert output.interpolated_mask[:, 0].tolist() == [
+		False,
+		False,
+		False,
+		True,
+		False,
+		False,
+		False,
+	]	
 
 def test_regularize_requires_times():
 	series = TimeSeries(
@@ -439,4 +611,307 @@ def test_linear_interpolation_preserves_observed_mask():
 		2.0
 	)
 	
+def test_make_regular_grid():
+	grid = make_regular_grid(
+		start=-2.0,
+		stop=3.0,
+		cadence=1.0,
+	)
+
+	np.testing.assert_allclose(
+		grid,
+		[
+			-2.0,
+			-1.0,
+			0.0,
+			1.0,
+			2.0,
+			3.0,
+		],
+	)
 	
+def test_make_regular_grid_requires_integer_number_of_intervals():
+	with pytest.raises(
+		ValueError,
+		match="integer multiple",
+	):
+		make_regular_grid(
+			start=-2.0,
+			stop=3.0,
+			cadence=2.0,
+		)
+		
+def test_regularization_method_defaults_to_bin():
+	config = TimeSeriesPreprocessConfig()
+
+	assert (
+		config.regularization_method
+		== "bin"
+	)
+	
+def test_regularization_records_method():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			1.0,
+			2.0,
+		]),
+		values=np.asarray([
+			1.0,
+			2.0,
+			3.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+	)
+
+	assert (
+		output.metadata[
+			"regularization_method"
+		]
+		== "bin"
+	)
+	
+	
+def test_gp_regularization_basic():
+	times = np.asarray([
+		0.0,
+		1.5,
+		3.2,
+		5.0,
+	])
+
+	values = np.asarray([
+		0.0,
+		1.0,
+		0.5,
+		0.0,
+	])
+
+	errors = np.asarray([
+		0.1,
+		0.1,
+		0.1,
+		0.1,
+	])
+
+	series = TimeSeries(
+		times=times,
+		values=values,
+		errors=errors,
+	)
+
+	grid = make_regular_grid(
+		start=0.0,
+		stop=5.0,
+		cadence=1.0,
+	)
+
+	output = regularize_timeseries_gp(
+		series,
+		grid=grid,
+		rho=1.0,
+	)
+
+	np.testing.assert_allclose(
+		output.times,
+		grid,
+	)
+
+	assert output.values.shape == (
+		grid.size,
+		1,
+	)
+
+	assert output.errors.shape == (
+		grid.size,
+		1,
+	)
+
+	assert np.all(
+		np.isfinite(
+			output.values[:, 0]
+		)
+	)
+
+	assert np.all(
+		np.isfinite(
+			output.errors[:, 0]
+		)
+	)
+
+	assert (
+		output.metadata[
+			"regularization_method"
+		]
+		== "gp"
+	)
+	
+def test_gp_regularization_preserves_aligned_anchor_bin():
+	series = TimeSeries(
+		times=np.asarray([
+			-4.0,
+			-1.0,
+			0.0,
+			2.0,
+			5.0,
+		]),
+		values=np.asarray([
+			1.0,
+			4.0,
+			10.0,
+			5.0,
+			1.0,
+		]),
+		errors=np.asarray([
+			0.2,
+			0.2,
+			0.2,
+			0.2,
+			0.2,
+		]),
+		metadata={
+			"alignment_anchor_time_aligned": 0.0,
+		},
+	)
+
+	grid = make_regular_grid(
+		start=-5.0,
+		stop=5.0,
+		cadence=1.0,
+	)
+
+	output = regularize_timeseries_gp(
+		series,
+		grid=grid,
+		rho=2.0,
+	)
+
+	assert output.times[5] == pytest.approx(
+		0.0
+	)
+	
+
+def test_gp_regularization_marks_predictions():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			2.0,
+			4.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+			1.0,
+		]),
+		errors=np.asarray([
+			0.1,
+			0.1,
+			0.1,
+		]),
+	)
+
+	grid = make_regular_grid(
+		start=0.0,
+		stop=4.0,
+		cadence=1.0,
+	)
+
+	output = regularize_timeseries_gp(
+		series,
+		grid=grid,
+		rho=1.0,
+	)
+
+	assert output.observed_mask[:, 0].tolist() == [
+		False,
+		False,
+		False,
+		False,
+		False,
+	]
+
+	assert output.interpolated_mask[:, 0].tolist() == [
+		False,
+		False,
+		False,
+		False,
+		False,
+	]
+
+	assert output.predicted_mask[:, 0].tolist() == [
+		True,
+		True,
+		True,
+		True,
+		True,
+	]
+	
+	
+def test_gp_regularization_requires_enough_points():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+		]),
+		values=np.asarray([
+			1.0,
+		]),
+		errors=np.asarray([
+			0.1,
+		]),
+	)
+
+	grid = np.asarray([
+		0.0,
+		1.0,
+	])
+
+	output = regularize_timeseries_gp(
+		series,
+		grid=grid,
+	)
+
+	assert np.all(
+		np.isnan(
+			output.values[:, 0]
+		)
+	)
+	
+def test_gp_regularization_rejects_invalid_errors():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			1.0,
+			2.0,
+		]),
+		values=np.asarray([
+			1.0,
+			2.0,
+			1.0,
+		]),
+		errors=np.asarray([
+			0.1,
+			np.nan,
+			0.1,
+		]),
+	)
+
+	grid = np.asarray([
+		0.0,
+		1.0,
+		2.0,
+	])
+
+	with pytest.raises(
+		ValueError,
+		match="finite positive errors",
+	):
+		regularize_timeseries_gp(
+			series,
+			grid=grid,
+		)
+		
+

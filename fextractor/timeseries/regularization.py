@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
+from scipy.interpolate import (
+	Akima1DInterpolator,
+	CubicSpline,
+	PchipInterpolator,
+)
 
 from .data import TimeSeries
 
@@ -10,6 +15,15 @@ SUPPORTED_BIN_AGGREGATIONS = (
 	"mean",
 	"inverse-variance",
 )
+
+SUPPORTED_MISSING_STRATEGIES = (
+	"nan",
+	"linear",
+	"pchip",
+	"akima",
+	"cubic",
+)
+
 
 def infer_cadence(
 	times: np.ndarray,
@@ -88,23 +102,57 @@ def is_regular_timeseries(
 	)
 
 
-def _linear_fill(
+def _fill_missing(
+	grid: np.ndarray,
 	values: np.ndarray,
 	observed_mask: np.ndarray,
 	errors: np.ndarray | None = None,
+	method: str = "linear",
 ) -> tuple[
 	np.ndarray,
 	np.ndarray | None,
 	np.ndarray,
 ]:
-	"""Fill internal gaps by linear interpolation.
+	"""Fill internal gaps using the requested interpolation method.
 
-	Only gaps between observed samples are filled. Values outside the
-	first/last observed samples are left unchanged.
+	Only gaps between the first and last observed samples of each channel
+	are filled. No extrapolation is performed.
 
-	Measurement errors are propagated assuming independent uncertainties
-	on the two samples bracketing each interpolated point.
+	For linear interpolation, measurement uncertainties are propagated
+	analytically assuming independent errors on the two bracketing
+	observations.
+
+	For higher-order interpolation methods, interpolated uncertainties are
+	left as NaN.
 	"""
+
+	if method not in SUPPORTED_MISSING_STRATEGIES:
+		raise ValueError(
+			f"Unsupported interpolation method '{method}'. "
+			f"Supported values: "
+			f"{', '.join(SUPPORTED_MISSING_STRATEGIES)}"
+		)
+
+	if method == "nan":
+		return (
+			values.copy(),
+			None if errors is None else errors.copy(),
+			np.zeros(
+				values.shape,
+				dtype=bool,
+			),
+		)
+
+	grid = np.asarray(
+		grid,
+		dtype=np.float64,
+	).reshape(-1)
+
+	if grid.shape[0] != values.shape[0]:
+		raise ValueError(
+			"Grid length does not match values: "
+			f"{grid.shape[0]} != {values.shape[0]}"
+		)
 
 	output = values.copy()
 
@@ -119,11 +167,6 @@ def _linear_fill(
 		dtype=bool,
 	)
 
-	x = np.arange(
-		values.shape[0],
-		dtype=np.float64,
-	)
-
 	for channel in range(
 		values.shape[1]
 	):
@@ -134,20 +177,36 @@ def _linear_fill(
 			)
 		)
 
-		if valid.sum() < 2:
+		n_valid = int(
+			np.sum(valid)
+		)
+
+		if n_valid < 2:
 			continue
 
 		valid_indices = np.flatnonzero(
 			valid
 		)
 
-		first = valid_indices[0]
-		last = valid_indices[-1]
+		first = int(
+			valid_indices[0]
+		)
 
-		fill_region = (
-			(~valid)
-			& (x >= first)
-			& (x <= last)
+		last = int(
+			valid_indices[-1]
+		)
+
+		fill_region = np.zeros(
+			values.shape[0],
+			dtype=bool,
+		)
+
+		fill_region[
+			first:last + 1
+		] = (
+			~valid[
+				first:last + 1
+			]
 		)
 
 		if not np.any(
@@ -155,29 +214,100 @@ def _linear_fill(
 		):
 			continue
 
-		# - Interpolate values
-		output[
-			fill_region,
+		x_obs = grid[
+			valid
+		]
+
+		y_obs = output[
+			valid,
 			channel,
-		] = np.interp(
-			x[fill_region],
-			x[valid],
-			output[
-				valid,
-				channel,
-			],
+		]
+
+		x_fill = grid[
+			fill_region
+		]
+
+		if method == "linear":
+			y_fill = np.interp(
+				x_fill,
+				x_obs,
+				y_obs,
+			)
+
+		elif method == "pchip":
+			interpolator = PchipInterpolator(
+				x_obs,
+				y_obs,
+				extrapolate=False,
+			)
+
+			y_fill = interpolator(
+				x_fill
+			)
+
+		elif method == "akima":
+			if n_valid < 3:
+				continue
+
+			interpolator = Akima1DInterpolator(
+				x_obs,
+				y_obs,
+				extrapolate=False,
+			)
+
+			y_fill = interpolator(
+				x_fill
+			)
+
+		elif method == "cubic":
+			if n_valid < 3:
+				continue
+
+			interpolator = CubicSpline(
+				x_obs,
+				y_obs,
+				extrapolate=False,
+			)
+
+			y_fill = interpolator(
+				x_fill
+			)
+
+		else:
+			raise RuntimeError(
+				f"Unhandled interpolation method '{method}'"
+			)
+
+		finite_fill = np.isfinite(
+			y_fill
 		)
 
+		target_indices = np.flatnonzero(
+			fill_region
+		)
+
+		target_indices = target_indices[
+			finite_fill
+		]
+
+		output[
+			target_indices,
+			channel,
+		] = y_fill[
+			finite_fill
+		]
+
 		interpolated_mask[
-			fill_region,
+			target_indices,
 			channel,
 		] = True
 
-		# - Propagate measurement errors
-		if output_errors is not None:
-			for target_index in np.flatnonzero(
-				fill_region
-			):
+		# - Propagate errors only for linear interpolation
+		if (
+			method == "linear"
+			and output_errors is not None
+		):
+			for target_index in target_indices:
 				left_candidates = valid_indices[
 					valid_indices < target_index
 				]
@@ -216,9 +346,21 @@ def _linear_fill(
 				):
 					continue
 
+				x_left = grid[
+					left
+				]
+
+				x_right = grid[
+					right
+				]
+
+				x_target = grid[
+					target_index
+				]
+
 				alpha = (
-					(target_index - left)
-					/ (right - left)
+					(x_target - x_left)
+					/ (x_right - x_left)
 				)
 
 				output_errors[
@@ -237,7 +379,92 @@ def _linear_fill(
 		interpolated_mask,
 	)
 
+def make_regular_grid(
+	start: float,
+	stop: float,
+	cadence: float,
+) -> np.ndarray:
+	"""Construct a regular temporal grid."""
 
+	start = float(
+		start
+	)
+
+	stop = float(
+		stop
+	)
+
+	cadence = float(
+		cadence
+	)
+
+	if not np.isfinite(start):
+		raise ValueError(
+			f"Grid start must be finite, got {start}"
+		)
+
+	if not np.isfinite(stop):
+		raise ValueError(
+			f"Grid stop must be finite, got {stop}"
+		)
+
+	if not np.isfinite(cadence):
+		raise ValueError(
+			f"Cadence must be finite, got {cadence}"
+		)
+
+	if cadence <= 0:
+		raise ValueError(
+			f"Cadence must be positive, got {cadence}"
+		)
+
+	if stop < start:
+		raise ValueError(
+			f"Grid stop ({stop}) must be greater than "
+			f"or equal to grid start ({start})"
+		)
+
+	span = (
+		stop
+		- start
+	)
+
+	n_intervals_float = (
+		span
+		/ cadence
+	)
+
+	n_intervals = int(
+		np.round(
+			n_intervals_float
+		)
+	)
+
+	if not np.isclose(
+		n_intervals_float,
+		n_intervals,
+		rtol=1.0e-9,
+		atol=1.0e-12,
+	):
+		raise ValueError(
+			"Regularization grid span must be an integer "
+			"multiple of cadence: "
+			f"start={start}, stop={stop}, cadence={cadence}"
+		)
+
+	n_grid = (
+		n_intervals
+		+ 1
+	)
+
+	return (
+		start
+		+ np.arange(
+			n_grid,
+			dtype=np.float64,
+		)
+		* cadence
+	)
 
 def regularize_timeseries(
 	series: TimeSeries,
@@ -252,7 +479,8 @@ def regularize_timeseries(
 	Multiple observations assigned to the same grid point are aggregated
 	according to ``bin_aggregation``.
 
-	Missing grid points can either remain NaN or be linearly interpolated.
+	Missing internal grid points can optionally be interpolated using
+	the configured interpolation strategy. Extrapolation is not performed.
 	"""
 
 	if bin_aggregation not in SUPPORTED_BIN_AGGREGATIONS:
@@ -334,46 +562,14 @@ def regularize_timeseries(
 		)
 
 	# - Construct regular grid
-	span = (
-		stop
-		- start
+	grid = make_regular_grid(
+		start=start,
+		stop=stop,
+		cadence=cadence,
 	)
-
-	n_intervals_float = (
-		span
-		/ cadence
-	)
-
-	n_intervals = int(
-		np.round(
-			n_intervals_float
-		)
-	)
-
-	if not np.isclose(
-		n_intervals_float,
-		n_intervals,
-		rtol=1.0e-9,
-		atol=1.0e-12,
-	):
-		raise ValueError(
-			"Regularization grid span must be an integer "
-			"multiple of cadence: "
-			f"start={start}, stop={stop}, cadence={cadence}"
-		)
 
 	n_grid = (
-		n_intervals
-		+ 1
-	)
-
-	grid = (
-		start
-		+ np.arange(
-			n_grid,
-			dtype=np.float64,
-		)
-		* cadence
+		grid.size
 	)
 
 	n_variates = (
@@ -651,25 +847,24 @@ def regularize_timeseries(
 		)
 
 	# - Handle missing grid cells
-	if missing_strategy == "nan":
-		pass
+	if missing_strategy not in SUPPORTED_MISSING_STRATEGIES:
+		raise ValueError(
+			f"Unsupported missing_strategy '{missing_strategy}'. "
+			f"Supported values: "
+			f"{', '.join(SUPPORTED_MISSING_STRATEGIES)}"
+		)
 
-	elif missing_strategy == "linear":
+	if missing_strategy != "nan":
 		(
 			values,
 			errors,
 			interpolated_mask,
-		) = _linear_fill(
+		) = _fill_missing(
+			grid,
 			values,
 			observed_mask,
 			errors=errors,
-		)
-
-	else:
-		raise ValueError(
-			"Unsupported missing_strategy "
-			f"'{missing_strategy}'. "
-			"Supported values: nan, linear"
+			method=missing_strategy,
 		)
 
 	# - Fill metadata
@@ -679,6 +874,7 @@ def regularize_timeseries(
 
 	metadata.update({
 		"regularized": True,
+		"regularization_method": "bin",
 		"cadence": cadence,
 		"missing_strategy": missing_strategy,
 		"bin_aggregation": bin_aggregation,
@@ -686,6 +882,7 @@ def regularize_timeseries(
 		"regularization_grid_stop": stop,
 		"regularization_grid_size": n_grid,
 	})
+	
 
 	if (
 		"alignment_anchor_time_aligned"

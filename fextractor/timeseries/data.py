@@ -18,6 +18,7 @@ class TimeSeries:
 	times: np.ndarray | None = None
 	observed_mask: np.ndarray | None = None
 	interpolated_mask: np.ndarray | None = None
+	predicted_mask: np.ndarray | None = None
 	errors: np.ndarray | None = None
 	channel_names: tuple[str, ...] | None = None
 	metadata: dict = field(default_factory=dict)
@@ -55,6 +56,7 @@ class TimeSeries:
 
 			self.times = times
 
+		# - Handle observed mask
 		if self.observed_mask is None:
 			self.observed_mask = np.isfinite(
 				values
@@ -82,8 +84,7 @@ class TimeSeries:
 				& np.isfinite(values)
 			)
 
-
-
+		# - Handle interpolated mask
 		if self.interpolated_mask is None:
 			self.interpolated_mask = np.zeros(
 				values.shape,
@@ -112,7 +113,36 @@ class TimeSeries:
 				& np.isfinite(values)
 			)
 
+		# - Handle predicted mask
+		if self.predicted_mask is None:
+			self.predicted_mask = np.zeros(
+				values.shape,
+				dtype=bool,
+			)
 
+		else:
+			predicted_mask = np.asarray(
+				self.predicted_mask,
+				dtype=bool,
+			)
+
+			if predicted_mask.ndim == 1:
+				predicted_mask = (
+					predicted_mask[:, None]
+				)
+
+			if predicted_mask.shape != values.shape:
+				raise ValueError(
+					"predicted_mask shape does not match values: "
+					f"{predicted_mask.shape} != {values.shape}"
+				)
+
+			self.predicted_mask = (
+				predicted_mask
+				& np.isfinite(values)
+			)
+
+		# - Validate masks
 		if np.any(
 			self.observed_mask
 			& self.interpolated_mask
@@ -121,7 +151,24 @@ class TimeSeries:
 				"A sample cannot be both observed and interpolated"
 			)
 
+		if np.any(
+			self.observed_mask
+			& self.predicted_mask
+		):
+			raise ValueError(
+				"A sample cannot be both observed and predicted"
+			)
 
+		if np.any(
+			self.interpolated_mask
+			& self.predicted_mask
+		):
+			raise ValueError(
+				"A sample cannot be both interpolated and predicted"
+			)
+
+
+		# - Handle errors
 		if self.errors is not None:
 			errors = np.asarray(
 				self.errors,
@@ -174,6 +221,7 @@ class TimeSeries:
 			),
 			observed_mask=self.observed_mask.copy(),
 			interpolated_mask=self.interpolated_mask.copy(),
+			predicted_mask=self.predicted_mask.copy(),
 			errors=(
 				None
 				if self.errors is None
