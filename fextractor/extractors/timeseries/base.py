@@ -16,7 +16,6 @@ from ...timeseries import (
 	TimeSeries,
 	read_timeseries,
 )
-from ...timeseries.data import TimeSeries
 
 from ...timeseries.aggregation import (
 	TokenRepresentation,
@@ -40,18 +39,24 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 			or TimeSeriesPreprocessConfig()
 		)
 
-	def prepare(
+
+	def prepare_with_input(
 		self,
-		source: str | Path,
-	) -> TimeSeries:
-		"""Read and domain-preprocess one time series."""
+		source: str | Path | TimeSeries,
+	) -> tuple[
+		TimeSeries,
+		TimeSeries,
+	]:
+		"""Read a time series and return input and preprocessed copies."""
 
+		if isinstance(
+			source,
+			TimeSeries,
+		):
+			input_series = source.copy()
 
-		if isinstance(source, TimeSeries):
-			series = source.copy()
-			
 		else:
-			series = read_timeseries(
+			input_series = read_timeseries(
 				source,
 				time_column=self.preprocessing.time_column,
 				value_columns=self.preprocessing.value_columns,
@@ -67,22 +72,41 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 				metadata_columns=self.preprocessing.metadata_columns,
 			)
 
-		return apply_timeseries_preprocessing(
-			series,
-			self.preprocessing,
+		processed_series = (
+			apply_timeseries_preprocessing(
+				input_series,
+				self.preprocessing,
+			)
 		)
 
-	def extract(
+		return (
+			input_series,
+			processed_series,
+		)
+
+	def prepare(
 		self,
-		source: str | Path,
-	) -> np.ndarray:
-		"""Extract one one-dimensional representation."""
+		source: str | Path | TimeSeries,
+	) -> TimeSeries:
+		"""Read and domain-preprocess one time series."""
 
-		self.ensure_loaded()
-
-		series = self.prepare(
+		(
+			_,
+			processed_series,
+		) = self.prepare_with_input(
 			source
 		)
+
+		return processed_series
+
+	
+	def extract_prepared(
+		self,
+		series: TimeSeries,
+	) -> np.ndarray:
+		"""Extract a representation from an already prepared time series."""
+
+		self.ensure_loaded()
 
 		features = self.extract_timeseries(
 			series
@@ -92,6 +116,22 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 			features,
 			dtype=np.float32,
 		).reshape(-1)
+
+
+	def extract(
+		self,
+		source: str | Path | TimeSeries,
+	) -> np.ndarray:
+		"""Extract one one-dimensional representation."""
+
+		series = self.prepare(
+			source
+		)
+
+		return self.extract_prepared(
+			series
+		)
+
 
 	@abstractmethod
 	def extract_timeseries(

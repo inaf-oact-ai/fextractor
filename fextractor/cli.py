@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import logging
 import time
 import argparse
@@ -27,7 +28,16 @@ from .registry import (
 	get_backend_spec,
 	list_backends,
 )
-from .timeseries import SUPPORTED_AGGREGATIONS
+from .timeseries import (
+	SUPPORTED_AGGREGATIONS,
+	SUPPORTED_TIMESERIES_PLOT_MODES,
+	plot_timeseries_diagnostic,
+)
+
+from .extractors.timeseries.base import (
+	TimeSeriesFeatureExtractor,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--gp-sigma", type=float, default=None, help="Gaussian Process Matern-3/2 kernel amplitude. If omitted, inferred independently per channel.")
 	parser.add_argument("--gp-rho", type=float, default=None, help="Gaussian Process Matern-3/2 correlation length scale in timestamp units. If omitted, inferred independently per channel.")
 	parser.add_argument("--gp-jitter", type=float, default=None, help="Gaussian Process noise floor used when measurement errors are unavailable.")	
+	
+	parser.add_argument("--timeseries-plot", choices=SUPPORTED_TIMESERIES_PLOT_MODES, default="none", help="Save time-series diagnostic plots: none, input, processed, or both")
+	parser.add_argument("--timeseries-plot-dir", default=None, help="Directory used for time-series diagnostic plots. If omitted, plots are saved in the same directory as the output JSON file")	
 	
 	# - MOIRAI OPTIONS
 	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
@@ -491,6 +504,35 @@ def main(argv=None) -> int:
 		extractor = create_extractor(
 			config
 		)
+		
+		# - Resolve output plot dirs
+		timeseries_plot_dir = None
+
+		if args.timeseries_plot != "none":
+			if args.timeseries_plot_dir is not None:
+				timeseries_plot_dir = Path(
+					args.timeseries_plot_dir
+				)
+
+			else:
+				timeseries_plot_dir = (
+					Path(
+						args.outfile
+					).resolve().parent
+				)
+
+			timeseries_plot_dir.mkdir(
+				parents=True,
+				exist_ok=True,
+			)
+
+			logger.info(
+				"Time-series diagnostic plotting enabled: "
+				"mode='%s' directory='%s'",
+				args.timeseries_plot,
+				timeseries_plot_dir,
+			)
+			
 	
 		# - Extract features
 		if input_type in (
@@ -503,9 +545,49 @@ def main(argv=None) -> int:
 				args.inputfile,
 			)
 
-			features = extractor.extract(
-				args.inputfile
-			)
+			if (
+				input_type == "timeseries"
+				and args.timeseries_plot != "none"
+				and isinstance(
+					extractor,
+					TimeSeriesFeatureExtractor,
+				)
+			):
+				(
+					input_series,
+					processed_series,
+				) = extractor.prepare_with_input(
+					args.inputfile
+				)
+
+				plot_path = (
+					timeseries_plot_dir
+					/ (
+						f"{Path(args.inputfile).stem}"
+						"_timeseries.png"
+					)
+				)
+
+				plot_timeseries_diagnostic(
+					input_series,
+					processed_series,
+					plot_path,
+					mode=args.timeseries_plot,
+					title=Path(
+						args.inputfile
+					).name,
+				)
+
+				features = (
+					extractor.extract_prepared(
+						processed_series
+					)
+				)
+
+			else:
+				features = extractor.extract(
+					args.inputfile
+				)			
 
 			logger.info(
 				"Extracted representation with %d features",
@@ -541,7 +623,9 @@ def main(argv=None) -> int:
 				extractor,
 				nmax=args.nmax,
 				skip_errors=args.skip_errors,
-			)
+				timeseries_plot=args.timeseries_plot,
+				timeseries_plot_dir=timeseries_plot_dir,
+			)			
 
 			# - Save features
 			save_datalist_json(

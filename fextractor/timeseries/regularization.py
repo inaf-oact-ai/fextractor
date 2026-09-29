@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import logging
 from scipy.interpolate import (
 	Akima1DInterpolator,
 	CubicSpline,
@@ -10,6 +11,9 @@ from scipy.interpolate import (
 )
 
 from .data import TimeSeries
+
+logger = logging.getLogger(__name__)
+
 
 SUPPORTED_BIN_AGGREGATIONS = (
 	"mean",
@@ -576,6 +580,18 @@ def regularize_timeseries(
 		series.n_variates
 	)
 
+	logger.info(
+		"Starting bin regularization: "
+		"input_points=%d grid_points=%d channels=%d "
+		"cadence=%g aggregation='%s' missing_strategy='%s'",
+		series.n_time,
+		n_grid,
+		n_variates,
+		cadence,
+		bin_aggregation,
+		missing_strategy,
+	)
+
 	# - Common bin accumulators
 	sums = np.zeros(
 		(
@@ -866,6 +882,19 @@ def regularize_timeseries(
 			errors=errors,
 			method=missing_strategy,
 		)
+		
+	logger.info(
+		"Bin regularization completed: "
+		"observed=%d interpolated=%d missing=%d",
+		int(np.sum(observed_mask)),
+		int(np.sum(interpolated_mask)),
+		int(
+			np.sum(
+				~observed_mask
+				& ~interpolated_mask
+			)
+		),
+	)		
 
 	# - Fill metadata
 	metadata = (

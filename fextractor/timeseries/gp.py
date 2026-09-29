@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
-
+import logging
 from .data import TimeSeries
 
+logger = logging.getLogger(__name__)
 
 def regularize_timeseries_gp(
 	series: TimeSeries,
@@ -41,6 +42,14 @@ def regularize_timeseries_gp(
 
 	n_grid = grid.size
 	n_variates = series.n_variates
+	
+	logger.info(
+		"Starting GP regularization: "
+		"input_points=%d grid_points=%d channels=%d",
+		series.n_time,
+		n_grid,
+		n_variates,
+	)	
 
 	values = np.full(
 		(
@@ -78,8 +87,18 @@ def regularize_timeseries_gp(
 			)
 		)
 
-		if np.sum(valid) < 2:
-			continue
+		n_observed = int(
+			np.sum(valid)
+		)
+
+		if n_observed < 2:
+			logger.warning(
+				"Skipping GP regularization for channel=%d: "
+				"only %d valid observation(s)",
+				channel,
+				n_observed,
+			)
+			continue			
 
 		t_obs = times[
 			valid
@@ -162,7 +181,14 @@ def regularize_timeseries_gp(
 			mean=mean,
 		)
 
+		channel_name = (
+			series.channel_names[channel]
+			if series.channel_names is not None
+			else str(channel)
+		)
+
 		yerr = None
+		noise_source = "jitter"
 
 		if series.errors is not None:
 			yerr_candidate = series.errors[
@@ -179,6 +205,7 @@ def regularize_timeseries_gp(
 				& (yerr_candidate > 0)
 			):
 				yerr = yerr_candidate
+				noise_source = "measurement-errors"
 
 			elif np.any(
 				np.isfinite(
@@ -214,6 +241,18 @@ def regularize_timeseries_gp(
 				channel_jitter,
 				dtype=np.float64,
 			)
+
+		logger.info(
+			"GP channel='%s': "
+			"observations=%d sigma=%g rho=%g "
+			"noise='%s' yerr_median=%g",
+			channel_name,
+			n_observed,
+			channel_sigma,
+			channel_rho,
+			noise_source,
+			float(np.median(yerr)),
+		)
 
 		gp.compute(
 			t_obs,
@@ -254,6 +293,28 @@ def regularize_timeseries_gp(
 				channel,
 			]
 		)
+		
+		logger.info(
+			"GP channel='%s' completed: "
+			"predicted=%d/%d",
+			channel_name,
+			int(
+				np.sum(
+					predicted_mask[
+						:,
+						channel,
+					]
+				)
+			),
+			n_grid,
+		)		
+
+	logger.info(
+		"GP regularization completed: "
+		"predicted=%d/%d",
+		int(np.sum(predicted_mask)),
+		int(predicted_mask.size),
+	)
 
 	# - Fill metadata
 	metadata = (

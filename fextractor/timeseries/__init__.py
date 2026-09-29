@@ -23,6 +23,13 @@ from .aggregation import (
 	aggregate_token_representation,
 )
 
+from .plotting import (
+	SUPPORTED_TIMESERIES_PLOT_MODES,
+	make_index_coordinate,
+	plot_timeseries_diagnostic,
+	recover_physical_times,
+)
+
 __all__ = [
 	"SUPPORTED_TIMESERIES_EXTENSIONS",
 	"TimeSeries",
@@ -35,6 +42,10 @@ __all__ = [
 	"SUPPORTED_AGGREGATIONS",
 	"TokenRepresentation",
 	"aggregate_token_representation",
+	"SUPPORTED_TIMESERIES_PLOT_MODES",
+	"make_index_coordinate",
+	"plot_timeseries_diagnostic",
+	"recover_physical_times",
 ]
 
 

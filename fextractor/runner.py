@@ -11,6 +11,9 @@ from typing import Any
 
 from .base import FeatureExtractor
 from .extractors.timeseries.base import TimeSeriesFeatureExtractor
+from .timeseries import (
+	plot_timeseries_diagnostic,
+)
 from .timeseries.io import read_timeseries_record
 
 logger = logging.getLogger(__name__)
@@ -118,6 +121,8 @@ def extract_datalist(
 	feature_key: str = "feats",
 	copy_data: bool = False,
 	skip_errors: bool = False,
+	timeseries_plot: str = "none",
+	timeseries_plot_dir: str | Path | None = None,
 ) -> list[dict[str, Any]]:
 	"""
 		Extract features from filepath-based datalist entries.
@@ -144,6 +149,39 @@ def extract_datalist(
 	start_time = time.perf_counter()
 	processed = 0
 	skipped = 0
+	
+	plot_dir = None
+
+	if (
+		timeseries_plot != "none"
+		and isinstance(
+			extractor,
+			TimeSeriesFeatureExtractor,
+		)
+	):
+		if timeseries_plot_dir is None:
+			raise ValueError(
+				"timeseries_plot_dir must be provided "
+				"when time-series plotting is enabled"
+			)
+
+		plot_dir = Path(
+			timeseries_plot_dir
+		)
+
+		plot_dir.mkdir(
+			parents=True,
+			exist_ok=True,
+		)
+
+		logger.info(
+			"Time-series diagnostic plotting enabled: "
+			"mode='%s' directory='%s'",
+			timeseries_plot,
+			plot_dir,
+		)
+
+
 
 	for index, item in enumerate(output):
 		if nmax >= 0 and index >= nmax:
@@ -158,7 +196,49 @@ def extract_datalist(
 				filepath_index=filepath_index,
 			)
 
-			features = extractor.extract(source)
+			if (
+				plot_dir is not None
+				and isinstance(
+					extractor,
+					TimeSeriesFeatureExtractor,
+				)
+			):
+				(
+					input_series,
+					processed_series,
+				) = extractor.prepare_with_input(
+					source
+				)
+
+				plot_path = (
+					plot_dir
+					/ (
+						f"{index:06d}_"
+						"timeseries.png"
+					)
+				)
+
+				plot_timeseries_diagnostic(
+					input_series,
+					processed_series,
+					plot_path,
+					mode=timeseries_plot,
+					title=(
+						f"Datalist entry "
+						f"{index}"
+					),
+				)
+
+				features = (
+					extractor.extract_prepared(
+						processed_series
+					)
+				)
+
+			else:
+				features = extractor.extract(
+					source
+				)			
 
 			item[feature_key] = [float(value) for value in features]
 

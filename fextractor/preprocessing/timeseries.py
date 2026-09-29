@@ -673,6 +673,21 @@ def apply_timeseries_preprocessing(
 
 	output = series.copy()
 
+	logger.info(
+		"Starting time-series preprocessing: "
+		"n_time=%d n_variates=%d "
+		"time_transform='%s' value_transform='%s' "
+		"alignment='%s' regularize=%s "
+		"regularization_method='%s'",
+		output.n_time,
+		output.n_variates,
+		config.time_transform,
+		config.value_transform,
+		config.alignment,
+		config.regularize,
+		config.regularization_method,
+	)	
+
 	# - Sort entries
 	if (
 		config.sort_time
@@ -795,6 +810,11 @@ def apply_timeseries_preprocessing(
 				"falls on an exact regular-grid bin"
 			)
 			
+	if not config.regularize:
+		logger.info(
+			"Time-series regularization disabled"
+		)			
+			
 	# - Finally regularize
 	if config.regularize:
 		grid_start = None
@@ -818,6 +838,17 @@ def apply_timeseries_preprocessing(
 
 		# - Bin regularization mode
 		if config.regularization_method == "bin":
+			logger.info(
+				"Applying bin regularization: "
+				"cadence=%s missing_strategy='%s' "
+				"bin_aggregation='%s' grid_start=%s grid_stop=%s",
+				config.cadence,
+				config.missing_strategy,
+				config.bin_aggregation,
+				grid_start,
+				grid_stop,
+			)
+					
 			output = regularize_timeseries(
 				output,
 				cadence=config.cadence,
@@ -851,6 +882,19 @@ def apply_timeseries_preprocessing(
 				cadence=config.cadence,
 			)
 
+			logger.info(
+				"Applying GP regularization: "
+				"cadence=%s grid_start=%s grid_stop=%s "
+				"grid_size=%d sigma=%s rho=%s jitter=%s",
+				config.cadence,
+				grid_start,
+				grid_stop,
+				grid.size,
+				config.gp_sigma,
+				config.gp_rho,
+				config.gp_jitter,
+			)
+			
 			output = regularize_timeseries_gp(
 				output,
 				grid=grid,
@@ -859,6 +903,17 @@ def apply_timeseries_preprocessing(
 				jitter=config.gp_jitter,
 			)
 	
+	
+	logger.info(
+		"Time-series preprocessing completed: "
+		"n_time=%d n_variates=%d "
+		"observed=%d interpolated=%d predicted=%d",
+		output.n_time,
+		output.n_variates,
+		int(np.sum(output.observed_mask)),
+		int(np.sum(output.interpolated_mask)),
+		int(np.sum(output.predicted_mask)),
+	)	
 	
 	return output
 
