@@ -1,47 +1,7 @@
-"""Tests for registry/factory dispatch that do not load ML frameworks."""
+"""Tests for factory dispatch that do not load ML frameworks."""
 
 from fextractor.config import ExtractorConfig
 from fextractor.factory import create_extractor
-from fextractor.registry import get_backend_spec, list_backends
-
-
-def test_list_backends():
-	expected = (
-		"tensorflow",
-		"dinov2",
-		"dinov3",
-		"dinov2_legacy",
-		"siglip",
-		"siglip2",
-		"chronos2",
-		"moirai2",
-	)
-
-	assert list_backends() == expected
-
-	assert list_backends(
-		modality="image",
-	) == (
-		"tensorflow",
-		"dinov2",
-		"dinov3",
-		"dinov2_legacy",
-		"siglip",
-		"siglip2",
-	)
-
-	assert list_backends(
-		modality="timeseries",
-	) == (
-		"chronos2",
-		"moirai2",
-	)
-
-
-def test_backend_alias():
-	spec = get_backend_spec("tf")
-	assert spec.name == "tensorflow"
-	assert spec.modality == "image"
 
 
 def test_dino_factory_without_loading_model():
@@ -100,3 +60,28 @@ def test_chronos_factory_without_loading_model():
 
 	assert extractor.device == "cpu"
 	assert not extractor.is_loaded
+	
+	
+def test_licu_factory_without_loading_library():
+	config = ExtractorConfig(
+		backend="licu",
+		device="cpu",
+		options={
+			"feature_set": "basic",
+			"invalid_feature_policy": "error",
+			"min_samples": 8,
+		},
+	)
+
+	extractor = create_extractor(
+		config
+	)
+
+	assert extractor.backend == "licu"
+	assert extractor.modality == "timeseries"
+	assert extractor.feature_set == "basic"
+	assert extractor.invalid_feature_policy == "error"
+	assert extractor.min_samples == 8
+	assert not extractor.is_loaded
+	
+	

@@ -66,6 +66,10 @@ moirai = [
 	"uni2ts>=2.0,<3"
 ]
 
+licu = [
+	"light-curve>=0.13.3,<0.14"
+]
+
 # - DEP GROUPS
 torch-all = [
 	"torch>=2.0",
@@ -75,7 +79,8 @@ torch-all = [
 
 timeseries-all = [
 	"chronos-forecasting>=2.1,<3",
-	"uni2ts>=2.0,<3"
+	"uni2ts>=2.0,<3",
+	"light-curve>=0.13.3,<0.14"
 ]
 
 all = [
@@ -85,7 +90,8 @@ all = [
 	"torchvision>=0.15",
 	"transformers>=4.56",
 	"chronos-forecasting>=2.1,<3",
-	"uni2ts>=2.0,<3"
+	"uni2ts>=2.0,<3",
+	"light-curve>=0.13.3,<0.14"
 ]
 
 # - TEST

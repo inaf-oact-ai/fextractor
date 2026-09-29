@@ -103,6 +103,22 @@ _BACKEND_SPECS = (
 		default_model="Salesforce/moirai-2.0-R-small",
 		dependency_group="moirai",
 	),
+	BackendSpec(
+		name="licu",
+		modality="timeseries",
+		class_path=(
+			"fextractor.extractors.timeseries.licu:"
+			"LiCuFeatureExtractor"
+		),
+		factory_path=(
+			"fextractor.extractors.timeseries.licu:create"
+		),
+		aliases=(
+			"lightcurve",
+			"light-curve",
+		),
+		dependency_group="licu",
+	),
 )
 
 _BACKENDS: dict[str, BackendSpec] = {}

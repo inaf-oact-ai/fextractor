@@ -111,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
 	parser.add_argument("--token-order", choices=("by_variate", "interleave_time"), default=None, help="Moirai-2 token ordering for time_variate patching. If omitted, backend default is used.")
 	
+	# - LICU OPTIONS
+	parser.add_argument("--feature-set", choices=("basic", "default", "full"), default=None, help="LiCu handcrafted feature set. If omitted, backend default is used.")
+	parser.add_argument("--invalid-feature-policy", choices=("error", "zero",), default=None, help="LiCu policy for non-finite feature values. If omitted, backend default is used.")
+	parser.add_argument("--min-samples", type=int, default=None, help="LiCu minimum number of valid observed samples required per channel.")
+	
 	# - TIME SERIES INPUT LAYOUT OPTIONS
 	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
 	parser.add_argument("--value-prefixes", nargs="+", default=None, help="Wide-layout time-series column prefixes")
@@ -428,6 +433,26 @@ def _config_from_args(
 	if args.token_order is not None:
 		options["token_order"] = (
 			args.token_order
+		)
+		
+	if args.token_order is not None:
+		options["token_order"] = (
+			args.token_order
+		)
+
+	if args.feature_set is not None:
+		options["feature_set"] = (
+			args.feature_set
+		)
+
+	if args.invalid_feature_policy is not None:
+		options["invalid_feature_policy"] = (
+			args.invalid_feature_policy
+		)
+
+	if args.min_samples is not None:
+		options["min_samples"] = (
+			args.min_samples
 		)
 
 	return ExtractorConfig(
