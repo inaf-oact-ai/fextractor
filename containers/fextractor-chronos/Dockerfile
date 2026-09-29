@@ -66,6 +66,10 @@ RUN groupmod --new-name ${USER_NAME} ubuntu \
 RUN mkdir -p ${SOFTDIR} ${MODEL_DIR} ${HF_HOME} /workspace \
     && chown -R ${USER_NAME}:${USER_NAME} ${MODEL_DIR} ${HF_HOME} /workspace
 	
+# - Create matplotlib cache dir	
+ENV MPLCONFIGDIR=/tmp/matplotlib
+RUN mkdir -p ${MPLCONFIGDIR}	
+	
 ##########################################################
 ##     INSTALL SYS LIBS
 ##########################################################

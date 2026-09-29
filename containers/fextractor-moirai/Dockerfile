@@ -68,6 +68,10 @@ RUN groupadd --gid ${USER_GID} ${USER_NAME} \
 RUN mkdir -p ${SOFTDIR} ${MODEL_DIR} ${HF_HOME} /workspace \
     && chown -R ${USER_NAME}:${USER_NAME} ${MODEL_DIR} ${HF_HOME} /workspace
 	
+# - Create matplotlib cache dir	
+ENV MPLCONFIGDIR=/tmp/matplotlib
+RUN mkdir -p ${MPLCONFIGDIR}	
+	
 ##########################################################
 ##     INSTALL SYS LIBS
 ##########################################################
