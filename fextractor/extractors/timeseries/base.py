@@ -12,8 +12,11 @@ from ...preprocessing import (
 	TimeSeriesPreprocessConfig,
 	apply_timeseries_preprocessing,
 )
+
 from ...timeseries import (
+	DEFAULT_INPUT_SAMPLE_POLICY,
 	TimeSeries,
+	build_input_sample_mask,
 	read_timeseries,
 )
 
@@ -31,6 +34,7 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 	def __init__(
 		self,
 		preprocessing: TimeSeriesPreprocessConfig | None = None,
+		input_sample_policy: str = DEFAULT_INPUT_SAMPLE_POLICY,
 	) -> None:
 		super().__init__()
 
@@ -39,6 +43,33 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 			or TimeSeriesPreprocessConfig()
 		)
 
+		self.input_sample_policy = (
+			input_sample_policy
+		)
+
+	def metadata(self) -> dict:
+		"""Return common time-series extraction metadata."""
+
+		metadata = super().metadata()
+
+		metadata.update({
+			"input_sample_policy": (
+				self.input_sample_policy
+			),
+		})
+
+		return metadata
+
+	def get_input_sample_mask(
+		self,
+		series: TimeSeries,
+	) -> np.ndarray:
+		"""Return samples selected for backend consumption."""
+
+		return build_input_sample_mask(
+			series,
+			policy=self.input_sample_policy,
+		)
 
 	def prepare_with_input(
 		self,
@@ -149,12 +180,15 @@ class TokenTimeSeriesFeatureExtractor(
 		self,
 		aggregation: str = "mean_std",
 		preprocessing: TimeSeriesPreprocessConfig | None = None,
+		input_sample_policy: str = DEFAULT_INPUT_SAMPLE_POLICY,
 	) -> None:
 		super().__init__(
 			preprocessing=preprocessing,
+			input_sample_policy=input_sample_policy,
 		)
 
 		self.aggregation = aggregation
+
 
 	def extract_timeseries(
 		self,

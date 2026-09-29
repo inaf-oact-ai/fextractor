@@ -24,15 +24,18 @@ from .preprocessing import (
 	get_profile,
 	#list_profiles,
 )
+
 from .registry import (
 	get_backend_spec,
 	list_backends,
 )
 from .timeseries import (
 	SUPPORTED_AGGREGATIONS,
+	SUPPORTED_INPUT_SAMPLE_POLICIES,
 	SUPPORTED_TIMESERIES_PLOT_MODES,
 	plot_timeseries_diagnostic,
 )
+
 
 from .extractors.timeseries.base import (
 	TimeSeriesFeatureExtractor,
@@ -107,6 +110,18 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--timeseries-plot", choices=SUPPORTED_TIMESERIES_PLOT_MODES, default="none", help="Save time-series diagnostic plots: none, input, processed, or both")
 	parser.add_argument("--timeseries-plot-dir", default=None, help="Directory used for time-series diagnostic plots. If omitted, plots are saved in the same directory as the output JSON file")	
 	
+	parser.add_argument(
+		"--input-sample-policy",
+		choices=SUPPORTED_INPUT_SAMPLE_POLICIES,
+		default=None,
+		help=(
+			"Samples from the prepared time series exposed to the backend. "
+			"'observed' uses only measured/bin-observed samples; "
+			"'completed' also uses interpolated and GP-predicted samples. "
+			"Default: observed."
+		),
+	)
+	
 	# - MOIRAI OPTIONS
 	parser.add_argument("--patching-mode", choices=("time_only", "time_variate"), default=None, help="Moirai-2 patching mode. If omitted, backend default is used.")
 	parser.add_argument("--token-order", choices=("by_variate", "interleave_time"), default=None, help="Moirai-2 token ordering for time_variate patching. If omitted, backend default is used.")
@@ -114,7 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
 	# - LICU OPTIONS
 	parser.add_argument("--feature-set", choices=("basic", "default", "full"), default=None, help="LiCu handcrafted feature set. If omitted, backend default is used.")
 	parser.add_argument("--invalid-feature-policy", choices=("error", "zero",), default=None, help="LiCu policy for non-finite feature values. If omitted, backend default is used.")
-	parser.add_argument("--min-samples", type=int, default=None, help="LiCu minimum number of valid observed samples required per channel.")
+	parser.add_argument("--min-samples", type=int, default=None, help="LiCu minimum number of valid selected samples required per channel.")
 	
 	# - TIME SERIES INPUT LAYOUT OPTIONS
 	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
@@ -435,11 +450,6 @@ def _config_from_args(
 			args.token_order
 		)
 		
-	if args.token_order is not None:
-		options["token_order"] = (
-			args.token_order
-		)
-
 	if args.feature_set is not None:
 		options["feature_set"] = (
 			args.feature_set
@@ -453,6 +463,11 @@ def _config_from_args(
 	if args.min_samples is not None:
 		options["min_samples"] = (
 			args.min_samples
+		)
+		
+	if args.input_sample_policy is not None:
+		options["input_sample_policy"] = (
+			args.input_sample_policy
 		)
 
 	return ExtractorConfig(

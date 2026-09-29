@@ -8,7 +8,10 @@ import numpy as np
 
 from ...config import ExtractorConfig
 from ...preprocessing import TimeSeriesPreprocessConfig
-from ...timeseries import TimeSeries
+from ...timeseries import (
+	DEFAULT_INPUT_SAMPLE_POLICY,
+	TimeSeries,
+)
 from .base import TimeSeriesFeatureExtractor
 
 
@@ -50,9 +53,11 @@ class LiCuFeatureExtractor(TimeSeriesFeatureExtractor):
 		invalid_feature_policy: str = DEFAULT_INVALID_FEATURE_POLICY,
 		min_samples: int = DEFAULT_MIN_SAMPLES,
 		preprocessing: TimeSeriesPreprocessConfig | None = None,
+		input_sample_policy: str = DEFAULT_INPUT_SAMPLE_POLICY,
 	) -> None:
 		super().__init__(
 			preprocessing=preprocessing,
+			input_sample_policy=input_sample_policy,
 		)
 
 		if feature_set not in SUPPORTED_FEATURE_SETS:
@@ -201,7 +206,7 @@ class LiCuFeatureExtractor(TimeSeriesFeatureExtractor):
 		series: TimeSeries,
 		channel_index: int,
 	) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
-		"""Return finite, observed samples for one channel."""
+		"""Return finite samples selected by the configured input policy."""
 
 		if series.times is None:
 			raise ValueError(
@@ -217,12 +222,16 @@ class LiCuFeatureExtractor(TimeSeriesFeatureExtractor):
 			dtype=np.float64,
 		)
 
-		valid = (
-			series.observed_mask[:, channel_index]
-			& np.isfinite(time)
-			& np.isfinite(values)
+		
+		input_mask = self.get_input_sample_mask(
+			series
 		)
 
+		valid = (
+			input_mask[:, channel_index]
+			& np.isfinite(time)
+		)		
+		
 		errors = None
 
 		if series.errors is not None:
@@ -243,7 +252,7 @@ class LiCuFeatureExtractor(TimeSeriesFeatureExtractor):
 			else:
 				logger.warning(
 					"LiCu channel '%s': ignoring uncertainties because "
-					"one or more observed errors are non-finite or non-positive",
+					"one or more selected errors are non-finite or non-positive",
 					self._channel_name(
 						series,
 						channel_index,
@@ -256,7 +265,7 @@ class LiCuFeatureExtractor(TimeSeriesFeatureExtractor):
 		if time.size < self.min_samples:
 			raise ValueError(
 				f"LiCu channel '{self._channel_name(series, channel_index)}' "
-				f"has only {time.size} valid observed samples; "
+				f"has only {time.size} valid prepared samples; "
 				f"at least {self.min_samples} are required"
 			)
 
@@ -421,6 +430,21 @@ class LiCuFeatureExtractor(TimeSeriesFeatureExtractor):
 				"n_features": int(
 					features.size
 				),
+				"n_observed": int(
+					np.sum(
+						series.observed_mask[:, channel_index]
+					)
+				),
+				"n_interpolated": int(
+					np.sum(
+						series.interpolated_mask[:, channel_index]
+					)
+				),
+				"n_predicted": int(
+					np.sum(
+						series.predicted_mask[:, channel_index]
+					)
+				),
 				"errors_used": bool(
 					errors is not None
 				),
@@ -491,4 +515,8 @@ def create(
 			DEFAULT_MIN_SAMPLES,
 		),
 		preprocessing=preprocessing,
+		input_sample_policy=config.get_option(
+			"input_sample_policy",
+			DEFAULT_INPUT_SAMPLE_POLICY,
+		),
 	)

@@ -9,9 +9,11 @@ import numpy as np
 from ...config import ExtractorConfig
 from ...preprocessing import TimeSeriesPreprocessConfig
 from ...timeseries import (
+	DEFAULT_INPUT_SAMPLE_POLICY,
 	TimeSeries,
 	is_regular_timeseries,
 )
+
 from ...timeseries.aggregation import TokenRepresentation
 from .base import TokenTimeSeriesFeatureExtractor
 
@@ -41,10 +43,12 @@ class Moirai2FeatureExtractor(
 		patching_mode: str = DEFAULT_PATCHING_MODE,
 		token_order: str = DEFAULT_TOKEN_ORDER,
 		preprocessing: TimeSeriesPreprocessConfig | None = None,
+		input_sample_policy: str = DEFAULT_INPUT_SAMPLE_POLICY,
 	) -> None:
 		super().__init__(
 			aggregation=aggregation,
 			preprocessing=preprocessing,
+			input_sample_policy=input_sample_policy,
 		)
 
 		if patching_mode not in (
@@ -834,16 +838,15 @@ class Moirai2FeatureExtractor(
 			series.values,
 			dtype=np.float32,
 		)
-
-		observed_mask = np.asarray(
-			series.observed_mask,
-			dtype=bool,
+		
+		input_mask = self.get_input_sample_mask(
+			series
 		)
 
 		# Moirai receives finite placeholder values together
 		# with the explicit observation mask.
 		values = np.where(
-			observed_mask,
+			input_mask,
 			values,
 			0.0,
 		).astype(
@@ -858,7 +861,7 @@ class Moirai2FeatureExtractor(
 		).unsqueeze(0)
 
 		mask = self.torch.as_tensor(
-			observed_mask,
+			input_mask,
 			dtype=self.torch.bool,
 			device=self.device,
 		).unsqueeze(0)
@@ -1023,4 +1026,8 @@ def create(
 			DEFAULT_TOKEN_ORDER,
 		),
 		preprocessing=preprocessing,
+		input_sample_policy=config.get_option(
+			"input_sample_policy",
+			DEFAULT_INPUT_SAMPLE_POLICY,
+		),
 	)

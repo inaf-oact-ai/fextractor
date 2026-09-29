@@ -9,9 +9,11 @@ import numpy as np
 from ...config import ExtractorConfig
 from ...preprocessing import TimeSeriesPreprocessConfig
 from ...timeseries import (
+	DEFAULT_INPUT_SAMPLE_POLICY,
 	TimeSeries,
 	is_regular_timeseries,
 )
+
 from ...timeseries.aggregation import TokenRepresentation
 from .base import TokenTimeSeriesFeatureExtractor
 
@@ -39,10 +41,12 @@ class Chronos2FeatureExtractor(
 		context_length: int | None = None,
 		batch_size: int = 256,
 		preprocessing: TimeSeriesPreprocessConfig | None = None,
+		input_sample_policy: str = DEFAULT_INPUT_SAMPLE_POLICY,
 	) -> None:
 		super().__init__(
 			aggregation=aggregation,
 			preprocessing=preprocessing,
+			input_sample_policy=input_sample_policy,
 		)
 
 		self.model_name = model_name
@@ -135,8 +139,12 @@ class Chronos2FeatureExtractor(
 			dtype=np.float32,
 		).copy()
 
+		input_mask = self.get_input_sample_mask(
+			series
+		)
+
 		values[
-			~series.observed_mask
+			~input_mask
 		] = np.nan
 
 		if series.is_univariate:
@@ -283,4 +291,8 @@ def create(
 			256,
 		),
 		preprocessing=preprocessing,
+		input_sample_policy=config.get_option(
+			"input_sample_policy",
+			DEFAULT_INPUT_SAMPLE_POLICY,
+		),
 	)

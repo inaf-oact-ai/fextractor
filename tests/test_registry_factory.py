@@ -37,6 +37,7 @@ def test_chronos_factory_without_loading_model():
 			"aggregation": "mean_std",
 			"context_length": 2048,
 			"batch_size": 16,
+			"input_sample_policy": "completed",
 		},
 	)
 
@@ -55,6 +56,10 @@ def test_chronos_factory_without_loading_model():
 		"mean_std"
 	)
 
+	assert extractor.input_sample_policy == (
+		"completed"
+	)
+	
 	assert extractor.context_length == 2048
 	assert extractor.batch_size == 16
 
@@ -70,6 +75,7 @@ def test_licu_factory_without_loading_library():
 			"feature_set": "basic",
 			"invalid_feature_policy": "error",
 			"min_samples": 8,
+			"input_sample_policy": "completed",
 		},
 	)
 
@@ -83,5 +89,8 @@ def test_licu_factory_without_loading_library():
 	assert extractor.invalid_feature_policy == "error"
 	assert extractor.min_samples == 8
 	assert not extractor.is_loaded
+	assert extractor.input_sample_policy == (
+		"completed"
+	)
 	
 	

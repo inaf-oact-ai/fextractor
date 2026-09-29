@@ -30,6 +30,12 @@ from .plotting import (
 	recover_physical_times,
 )
 
+from .input_policy import (
+	DEFAULT_INPUT_SAMPLE_POLICY,
+	SUPPORTED_INPUT_SAMPLE_POLICIES,
+	build_input_sample_mask,
+)
+
 __all__ = [
 	"SUPPORTED_TIMESERIES_EXTENSIONS",
 	"TimeSeries",
@@ -46,6 +52,9 @@ __all__ = [
 	"make_index_coordinate",
 	"plot_timeseries_diagnostic",
 	"recover_physical_times",
+	"DEFAULT_INPUT_SAMPLE_POLICY",
+	"SUPPORTED_INPUT_SAMPLE_POLICIES",
+	"build_input_sample_mask",
 ]
 
 
