@@ -75,6 +75,14 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "--alignment=[MODE] - Alignment anchor: none, peak-max, peak-min, or peak-abs"
 	echo "--alignment-window-before=[VALUE] - Time retained before the alignment anchor"
 	echo "--alignment-window-after=[VALUE] - Time retained after the alignment anchor"	
+	
+	echo ""
+
+	echo "=== TIME-SERIES DIAGNOSTIC PLOT OPTIONS ==="
+	echo "--timeseries-plot=[MODE] - Save time-series diagnostic plots: none, input, processed, or both"
+	echo "--timeseries-plot-dir=[DIR] - Directory used for diagnostic plots. If omitted, plots are saved beside the output JSON"
+	echo ""
+
 	echo ""
 	
 	echo "=== REPRESENTATION OPTIONS ==="
@@ -166,6 +174,10 @@ BIN_AGGREGATION=""
 GP_SIGMA=""
 GP_RHO=""
 GP_JITTER=""
+
+# - Time-series diagnostic plots
+TIMESERIES_PLOT=""
+TIMESERIES_PLOT_DIR=""
 
 # - Representation options
 AGGREGATION=""
@@ -329,6 +341,14 @@ do
 			MISSING_STRATEGY=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
+		--timeseries-plot=*)
+			TIMESERIES_PLOT=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--timeseries-plot-dir=*)
+			TIMESERIES_PLOT_DIR=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+		
 		--aggregation=*)
 			AGGREGATION=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
@@ -551,6 +571,16 @@ FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
 
 SAVE_OPTS="--outfile=$OUTFILE "
 
+PLOT_OPTS=""
+
+if [ "$TIMESERIES_PLOT" != "" ]; then
+	PLOT_OPTS="$PLOT_OPTS --timeseries-plot=$TIMESERIES_PLOT "
+fi
+
+if [ "$TIMESERIES_PLOT_DIR" != "" ]; then
+	PLOT_OPTS="$PLOT_OPTS --timeseries-plot-dir=\"$TIMESERIES_PLOT_DIR\" "
+fi
+
 # - Resolve selected model to fextractor backend and local model path
 MODEL_OPTS=""
 
@@ -622,6 +652,7 @@ generate_exec_script(){
 				$PREPROC_OPTS \
 				$MODEL_OPTS \
 				$REPRESENTATION_OPTS \
+				$PLOT_OPTS \
 				$SAVE_OPTS \
 				$RUN_OPTS "
 
@@ -684,13 +715,13 @@ generate_exec_script(){
 				
 				echo " "
 				
-				#echo 'tab_count=`ls -1 *.sav 2>/dev/null | wc -l`'
-				#echo 'if [ $tab_count != 0 ] ; then'
-				#echo "  echo \"INFO: Copying output model & data loader file(s) to $JOB_OUTDIR ...\""
-				#echo "  cp *.sav $JOB_OUTDIR"
-				#echo "fi"
+				echo 'plot_count=`ls -1 *.png 2>/dev/null | wc -l`'
+				echo 'if [ $plot_count != 0 ] ; then'
+				echo "  echo \"INFO: Copying diagnostic plot file(s) to $JOB_OUTDIR ...\""
+				echo "  cp *.png \"$JOB_OUTDIR\""
+				echo "fi"
 				
-				#echo " "
+				echo " "
 		
 				echo "# - Show output directory"
 				echo "echo \"INFO: Show files in $JOB_OUTDIR ...\""
