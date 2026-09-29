@@ -96,7 +96,7 @@ RUN git pull origin ${FEXTRACTOR_REF}
 
 # - Install
 WORKDIR ${FEXTRACTOR_SRC_DIR}
-RUN python -m pip install -e "${FEXTRACTOR_SRC_DIR}[chronos,gp]"
+RUN python -m pip install -e "${FEXTRACTOR_SRC_DIR}[chronos,gp,plot]"
 
 ######################################
 ##     RUN
