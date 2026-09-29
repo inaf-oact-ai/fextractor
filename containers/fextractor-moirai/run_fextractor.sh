@@ -40,6 +40,7 @@ if [ "$NARGS" -lt 1 ]; then
 	echo ""
 
 	echo "=== TIME-SERIES PREPROCESSING OPTIONS ==="
+	echo "--input-sample-policy=[POLICY] - Samples passed to the backend: observed or completed. Default: observed"	
 	echo "--preproc-profile=[PROFILE] - Time-series preprocessing profile. Default: default"
 	echo "--timeseries-layout=[LAYOUT] - Input table layout: long or wide"
 	echo ""
@@ -141,6 +142,7 @@ MODEL="moirai2"
 BACKEND="moirai2"
 
 # - Time-series preprocessing
+INPUT_SAMPLE_POLICY=""
 PREPROC_PROFILE="default"
 TIMESERIES_LAYOUT=""
 TIME_COLUMN=""
@@ -221,6 +223,10 @@ do
 		;;
 		
 		# - TIME-SERIES OPTIONS
+		--input-sample-policy=*)
+			INPUT_SAMPLE_POLICY=`echo "$item" | sed 's/^[^=]*=//'`
+		;;		
+		
 		--preproc-profile=*)
 			PREPROC_PROFILE=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
@@ -565,6 +571,10 @@ fi
 
 if [ "$TOKEN_ORDER" != "" ]; then
 	REPRESENTATION_OPTS="$REPRESENTATION_OPTS --token-order=$TOKEN_ORDER "
+fi
+
+if [ "$INPUT_SAMPLE_POLICY" != "" ]; then
+	REPRESENTATION_OPTS="$REPRESENTATION_OPTS --input-sample-policy=$INPUT_SAMPLE_POLICY "
 fi
 
 FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
