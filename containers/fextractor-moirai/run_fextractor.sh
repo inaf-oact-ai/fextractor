@@ -778,11 +778,16 @@ echo "INFO: Creating run script file $shfile ..."
 generate_exec_script "$shfile"
 
 # - Launch run script
+JOB_STATUS=0
 if [ "$RUN_SCRIPT" = true ] ; then
 	echo "INFO: Running script $shfile to local shell system ..."
-	$JOB_DIR/$shfile
+	#$JOB_DIR/$shfile
+	if $JOB_DIR/$shfile ; then
+		JOB_STATUS=0
+	else
+		JOB_STATUS=$?
+	fi
 fi
 
-
 echo "*** END SUBMISSION ***"
-
+exit $JOB_STATUS
