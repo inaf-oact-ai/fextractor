@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 #######################################
 ##         SHOW USAGE
@@ -359,7 +359,6 @@ SAVE_OPTS="--outfile \"$OUTFILE\""
 shfile="submit_fextractor.sh"
 logfile="out.log"
 
-
 generate_exec_script(){
 
 	local shfile=$1
@@ -367,26 +366,76 @@ generate_exec_script(){
 	echo "INFO: Creating sh file $shfile ..."
 
 	(
-		echo "#!/bin/bash"
-
+		echo "#!/bin/bash -e"
 		echo ""
+		echo ""
+
+		echo 'JOB_STATUS=0'
+		echo ""
+
+		echo 'cleanup_job(){'
+		echo '	local SCRIPT_STATUS=$?'
+		echo ''
+		echo '	trap - EXIT'
+		echo '	set +e'
+		echo ''
+		echo '	if [ "$JOB_STATUS" -ne 0 ]; then'
+		echo '		SCRIPT_STATUS=$JOB_STATUS'
+		echo '	fi'
+		echo ''
+		echo '	echo "*************************************************"'
+		echo '	echo "****         COPY DATA TO OUTDIR             ****"'
+		echo '	echo "*************************************************"'
+		echo '	echo ""'
+
+		if [ "$JOB_DIR" != "$JOB_OUTDIR" ]; then
+
+			echo "	echo \"INFO: Copying job outputs to $JOB_OUTDIR ...\""
+			echo ""
+
+			echo "	if [ -f \"$OUTFILE\" ]; then"
+			echo "		cp \"$OUTFILE\" \"$JOB_OUTDIR/\""
+			echo '	fi'
+			echo ""
+
+			if [ "$REDIRECT_LOGS" = true ]; then
+				echo "	if [ -f \"$logfile\" ]; then"
+				echo "		cp \"$logfile\" \"$JOB_OUTDIR/\""
+				echo '	fi'
+				echo ""
+			fi
+
+			echo "	echo \"INFO: Files in output directory:\""
+			echo "	ls -ltr \"$JOB_OUTDIR\""
+			echo ""
+
+			if [ "$WAIT_COPY" = true ]; then
+				echo "	sleep $COPY_WAIT_TIME"
+			fi
+		fi
+
+		echo ''
+		echo '	echo "*** END RUN ***"'
+		echo ''
+		echo '	exit "$SCRIPT_STATUS"'
+		echo '}'
+		echo ""
+
+		echo 'trap cleanup_job EXIT'
 		echo ""
 
 		echo 'echo "*************************************************"'
 		echo 'echo "****         PREPARE JOB                     ****"'
 		echo 'echo "*************************************************"'
-
 		echo ""
 
 		echo "echo \"INFO: Entering job dir $JOB_DIR ...\""
 		echo "cd \"$JOB_DIR\""
-
 		echo ""
 
 		echo 'echo "*************************************************"'
 		echo 'echo "****         RUN FEXTRACTOR                  ****"'
 		echo 'echo "*************************************************"'
-
 		echo ""
 
 		EXE="fats_fextractor"
@@ -400,77 +449,32 @@ generate_exec_script(){
 		echo "date"
 		echo ""
 
-		echo "echo \"INFO: Running FATS feature extractor ...\""
+		echo 'echo "INFO: Running FATS feature extractor ..."'
 		echo "echo \"INFO: Command: $CMD\""
 
 		if [ "$REDIRECT_LOGS" = true ]; then
-			echo "$CMD >> \"$logfile\" 2>&1"
+			echo "if $CMD >> \"$logfile\" 2>&1 ; then"
 		else
-			echo "$CMD"
+			echo "if $CMD ; then"
 		fi
 
-		echo ""
-
-		echo 'JOB_STATUS=$?'
-		echo 'echo "Feature extractor run terminated with status=$JOB_STATUS"'
-
-		echo "date"
-
-		echo ""
-
-		echo 'if [ "$JOB_STATUS" -ne 0 ]; then'
-		echo '	echo "ERROR: FATS extraction failed"'
-		echo '	exit "$JOB_STATUS"'
+		echo '	JOB_STATUS=0'
+		echo 'else'
+		echo '	JOB_STATUS=$?'
 		echo 'fi'
-
 		echo ""
 
-		echo 'echo "*************************************************"'
-		echo 'echo "****         COPY DATA TO OUTDIR             ****"'
-		echo 'echo "*************************************************"'
-
+		echo 'echo "Feature extractor run terminated with status=$JOB_STATUS"'
+		echo "date"
 		echo ""
 
-		if [ "$JOB_DIR" != "$JOB_OUTDIR" ]; then
-
-			echo "echo \"INFO: Copying job outputs to $JOB_OUTDIR ...\""
-
-			echo ""
-
-			echo "if [ -f \"$OUTFILE\" ]; then"
-			echo "	cp \"$OUTFILE\" \"$JOB_OUTDIR/\""
-			echo "fi"
-
-			echo ""
-
-			if [ "$REDIRECT_LOGS" = true ]; then
-				echo "if [ -f \"$logfile\" ]; then"
-				echo "	cp \"$logfile\" \"$JOB_OUTDIR/\""
-				echo "fi"
-
-				echo ""
-			fi
-
-			echo "echo \"INFO: Files in output directory:\""
-			echo "ls -ltr \"$JOB_OUTDIR\""
-
-			echo ""
-
-			if [ "$WAIT_COPY" = true ]; then
-				echo "sleep $COPY_WAIT_TIME"
-			fi
-		fi
-
-		echo ""
-		echo 'echo "*** END RUN ***"'
-
-		echo ""
 		echo 'exit "$JOB_STATUS"'
 
 	) > "$shfile"
 
 	chmod +x "$shfile"
 }
+# close generate function
 
 
 #######################################
@@ -497,22 +501,20 @@ generate_exec_script \
 #######################################
 ##       RUN FEATURE EXTRACTOR
 #######################################
+JOB_STATUS=0
 
 if [ "$RUN_SCRIPT" = true ]; then
 
 	echo "INFO: Running script $shfile ..."
 
-	"$JOB_DIR/$shfile"
-
-	JOB_STATUS=$?
-
-	if [ "$JOB_STATUS" -ne 0 ]; then
-		echo "ERROR: FATS job failed with status=$JOB_STATUS"
-		exit "$JOB_STATUS"
+	if "$JOB_DIR/$shfile" ; then
+		JOB_STATUS=0
+	else
+		JOB_STATUS=$?
 	fi
-fi
 
+fi
 
 echo "*** END SUBMISSION ***"
 
-exit 0
+exit "$JOB_STATUS"
