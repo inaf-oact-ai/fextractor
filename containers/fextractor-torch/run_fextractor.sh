@@ -390,124 +390,132 @@ logfile="out.log"
 generate_exec_script(){
 
 	local shfile=$1
-	
-	
+
 	echo "INFO: Creating sh file $shfile ..."
-	( 
-			#echo "#!/bin/bash -e"
-			echo "#!/bin/bash"
-			
-      echo " "
-      echo " "
 
-      echo 'echo "*************************************************"'
-      echo 'echo "****         PREPARE JOB                     ****"'
-      echo 'echo "*************************************************"'
+	(
+		echo "#!/bin/bash -e"
+		echo ""
+		echo ""
 
-      echo " "
-       
-      echo "echo \"INFO: Entering job dir $JOB_DIR ...\""
-      echo "cd $JOB_DIR"
+		echo 'JOB_STATUS=0'
+		echo ""
 
-			echo " "
+		echo 'cleanup_job(){'
+		echo '	local SCRIPT_STATUS=$?'
+		echo ''
+		echo '	trap - EXIT'
+		echo '	set +e'
+		echo ''
+		echo '	if [ "$JOB_STATUS" -ne 0 ]; then'
+		echo '		SCRIPT_STATUS=$JOB_STATUS'
+		echo '	fi'
+		echo ''
+		echo '	echo "*************************************************"'
+		echo '	echo "****         COPY DATA TO OUTDIR             ****"'
+		echo '	echo "*************************************************"'
+		echo '	echo ""'
 
-      echo 'echo "*************************************************"'
-      echo 'echo "****         RUN FEXTRACTOR                  ****"'
-      echo 'echo "*************************************************"'
-				
-			EXE="fextractor" 
-			ARGS="$INPUT_OPTS $PREPROC_OPTS $MODEL_OPTS $SAVE_OPTS $RUN_OPTS "
-			CMD="$EXE $ARGS"
-
-			echo "date"
+		if [ "$JOB_DIR" != "$JOB_OUTDIR" ]; then
+			echo "	echo \"INFO: Copying job outputs in $JOB_OUTDIR ...\""
+			echo "	ls -ltr \"$JOB_DIR\""
 			echo ""
-		
-			echo "echo \"INFO: Running feature extractor ...\""
-			
-			if [ $REDIRECT_LOGS = true ]; then			
-      	echo "$CMD >> $logfile 2>&1"
-			else
-				echo "$CMD"
-      fi
-      
-			echo " "
 
-			echo 'JOB_STATUS=$?'
-			echo 'echo "Feature extractor run terminated with status=$JOB_STATUS"'
+			echo "	# - Copy output data"
+			echo '	tab_count=`ls -1 *.dat 2>/dev/null | wc -l`'
+			echo '	if [ "$tab_count" != 0 ] ; then'
+			echo "		echo \"INFO: Copying output table file(s) to $JOB_OUTDIR ...\""
+			echo "		cp *.dat \"$JOB_OUTDIR\""
+			echo '	fi'
+			echo ""
 
-			echo "date"
+			echo '	json_count=`ls -1 *.json 2>/dev/null | wc -l`'
+			echo '	if [ "$json_count" != 0 ] ; then'
+			echo "		echo \"INFO: Copying output json file(s) to $JOB_OUTDIR ...\""
+			echo "		if [ -f \"$OUTFILE\" ]; then"
+			echo "			cp \"$OUTFILE\" \"$JOB_OUTDIR\""
+			echo '		fi'
+			echo '	fi'
+			echo ""
 
-			echo " "
+			echo '	log_count=`ls -1 *.log 2>/dev/null | wc -l`'
+			echo '	if [ "$log_count" != 0 ] ; then'
+			echo "		echo \"INFO: Copying output log file(s) to $JOB_OUTDIR ...\""
+			echo "		if [ -f \"$logfile\" ]; then"
+			echo "			cp \"$logfile\" \"$JOB_OUTDIR\""
+			echo '		fi'
+			echo '	fi'
+			echo ""
 
-      echo 'echo "*************************************************"'
-      echo 'echo "****         COPY DATA TO OUTDIR             ****"'
-      echo 'echo "*************************************************"'
-      echo 'echo ""'
-			
-			if [ "$JOB_DIR" != "$JOB_OUTDIR" ]; then
-				echo "echo \"INFO: Copying job outputs in $JOB_OUTDIR ...\""
-				echo "ls -ltr $JOB_DIR"
-				echo " "
+			echo "	echo \"INFO: Show files in $JOB_OUTDIR ...\""
+			echo "	ls -ltr \"$JOB_OUTDIR\""
+			echo ""
 
-				echo "# - Copy output data"
-				echo 'tab_count=`ls -1 *.dat 2>/dev/null | wc -l`'
-				echo 'if [ $tab_count != 0 ] ; then'
-				echo "  echo \"INFO: Copying output table file(s) to $JOB_OUTDIR ...\""
-				echo "  cp *.dat $JOB_OUTDIR"
-				echo "fi"
-
-				echo " "
-				
-				echo 'tab_count=`ls -1 *.json 2>/dev/null | wc -l`'
-				echo 'if [ $tab_count != 0 ] ; then'
-				echo "  echo \"INFO: Copying output json file(s) to $JOB_OUTDIR ...\""
-				#echo "  cp *.json $JOB_OUTDIR"
-				echo "	cp \"$OUTFILE\" \"$JOB_OUTDIR\""
-				echo "fi"
-				
-				echo " "
-				
-				echo 'tab_count=`ls -1 *.log 2>/dev/null | wc -l`'
-				echo 'if [ $tab_count != 0 ] ; then'
-				echo "  echo \"INFO: Copying output log file(s) to $JOB_OUTDIR ...\""
-				#echo "  cp *.log $JOB_OUTDIR"
-				echo "	cp \"$logfile\" \"$JOB_OUTDIR\""
-				echo "fi"
-				
-				echo " "
-				
-				#echo 'tab_count=`ls -1 *.sav 2>/dev/null | wc -l`'
-				#echo 'if [ $tab_count != 0 ] ; then'
-				#echo "  echo \"INFO: Copying output model & data loader file(s) to $JOB_OUTDIR ...\""
-				#echo "  cp *.sav $JOB_OUTDIR"
-				#echo "fi"
-				
-				#echo " "
-		
-				echo "# - Show output directory"
-				echo "echo \"INFO: Show files in $JOB_OUTDIR ...\""
-				echo "ls -ltr $JOB_OUTDIR"
-
-				echo " "
-
-				echo "# - Wait a bit after copying data"
-				echo "#   NB: Needed if using rclone inside a container, otherwise nothing is copied"
-				if [ $WAIT_COPY = true ]; then
-           echo "sleep $COPY_WAIT_TIME"
-        fi
-	
+			if [ "$WAIT_COPY" = true ]; then
+				echo "	sleep $COPY_WAIT_TIME"
 			fi
+		fi
 
-      echo " "
-      echo " "
-      
-      echo 'echo "*** END RUN ***"'
+		echo ''
+		echo '	echo "*** END RUN ***"'
+		echo ''
+		echo '	exit "$SCRIPT_STATUS"'
+		echo '}'
+		echo ""
 
-			echo 'exit $JOB_STATUS'
+		echo 'trap cleanup_job EXIT'
+		echo ""
 
- 	) > $shfile
+		echo 'echo "*************************************************"'
+		echo 'echo "****         PREPARE JOB                     ****"'
+		echo 'echo "*************************************************"'
+		echo ""
 
-	chmod +x $shfile
+		echo "echo \"INFO: Entering job dir $JOB_DIR ...\""
+		echo "cd \"$JOB_DIR\""
+		echo ""
+
+		echo 'echo "*************************************************"'
+		echo 'echo "****         RUN FEXTRACTOR                  ****"'
+		echo 'echo "*************************************************"'
+		echo ""
+
+		EXE="fextractor"
+
+		ARGS="$INPUT_OPTS \
+			$PREPROC_OPTS \
+			$MODEL_OPTS \
+			$SAVE_OPTS \
+			$RUN_OPTS "
+
+		CMD="$EXE $ARGS"
+
+		echo "date"
+		echo ""
+
+		echo 'echo "INFO: Running feature extractor ..."'
+
+		if [ "$REDIRECT_LOGS" = true ]; then
+			echo "if $CMD >> \"$logfile\" 2>&1 ; then"
+		else
+			echo "if $CMD ; then"
+		fi
+
+		echo '	JOB_STATUS=0'
+		echo 'else'
+		echo '	JOB_STATUS=$?'
+		echo 'fi'
+		echo ""
+
+		echo 'echo "Feature extractor run terminated with status=$JOB_STATUS"'
+		echo "date"
+		echo ""
+
+		echo 'exit "$JOB_STATUS"'
+
+	) > "$shfile"
+
+	chmod +x "$shfile"
 }
 ## close function generate_exec_script()
 
@@ -529,11 +537,17 @@ echo "INFO: Creating run script file $shfile ..."
 generate_exec_script "$shfile"
 
 # - Launch run script
+JOB_STATUS=0
 if [ "$RUN_SCRIPT" = true ] ; then
 	echo "INFO: Running script $shfile to local shell system ..."
-	$JOB_DIR/$shfile
+	#$JOB_DIR/$shfile
+	if $JOB_DIR/$shfile ; then
+		JOB_STATUS=0
+	else
+		JOB_STATUS=$?
+	fi
 fi
 
 
 echo "*** END SUBMISSION ***"
-
+exit $JOB_STATUS
