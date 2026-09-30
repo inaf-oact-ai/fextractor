@@ -111,6 +111,9 @@ RUN python /opt/software/smoke_test.py
 ######################################
 ##     RUN
 ######################################
+# - Copy models
+COPY models/ ${MODEL_DIR}
+
 # - Copy run scripts
 COPY run_job.sh /home/$USER/run_job.sh
 RUN chmod +x /home/$USER/run_job.sh

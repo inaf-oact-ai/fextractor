@@ -130,6 +130,8 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--feature-set", choices=("basic", "default", "full"), default=None, help="LiCu handcrafted feature set. If omitted, backend default is used.")
 	parser.add_argument("--invalid-feature-policy", choices=("error", "zero",), default=None, help="LiCu policy for non-finite feature values. If omitted, backend default is used.")
 	parser.add_argument("--min-samples", type=int, default=None, help="LiCu minimum number of valid selected samples required per channel.")
+	parser.add_argument("--licu-embed-output", choices=("mean", "max", "sequence"), default=None, help="LiCu ML embedding output. Model-specific validation is applied by the backend.")
+	parser.add_argument("--licu-embed-reduction", choices=("beginning", "end", "middle", "non-overlapping-windows"), default=None, help="LiCu ML light-curve reduction/windowing strategy. If omitted, the model default is used.")
 	
 	# - TIME SERIES INPUT LAYOUT OPTIONS
 	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
@@ -464,12 +466,22 @@ def _config_from_args(
 		options["min_samples"] = (
 			args.min_samples
 		)
-		
+			
+	if args.licu_embed_output is not None:
+		options["licu_embed_output"] = (
+			args.licu_embed_output
+		)
+
+	if args.licu_embed_reduction is not None:
+		options["licu_embed_reduction"] = (
+			args.licu_embed_reduction
+		)
+
 	if args.input_sample_policy is not None:
 		options["input_sample_policy"] = (
 			args.input_sample_policy
 		)
-
+		
 	return ExtractorConfig(
 		backend=args.backend,
 		model=args.model,

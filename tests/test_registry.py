@@ -16,6 +16,7 @@ def test_backends_are_registered():
 		"chronos2",
 		"moirai2",
 		"licu",
+		"licu_embed",
 	)
 	
 def test_backend_modality():
@@ -28,9 +29,13 @@ def test_backend_aliases():
 	assert get_backend_spec("moirai").name == "moirai2"
 	assert get_backend_spec("lightcurve").name == "licu"
 	assert get_backend_spec("light-curve").name == "licu"
+	assert get_backend_spec("licu-embed").name == "licu_embed"
+	assert get_backend_spec("lightcurve-embed").name == "licu_embed"
+	assert get_backend_spec("light-curve-embed").name == "licu_embed"
 
 	assert get_backend_spec("chronos").modality == "timeseries"
 	assert get_backend_spec("lightcurve").modality == "timeseries"
+	assert get_backend_spec("licu-embed").modality == "timeseries"
 		
 def test_timeseries_backend_is_registered():
 	assert list_backends(
@@ -39,6 +44,7 @@ def test_timeseries_backend_is_registered():
 		"chronos2",
 		"moirai2",
 		"licu",
+		"licu_embed",
 	)
 
 

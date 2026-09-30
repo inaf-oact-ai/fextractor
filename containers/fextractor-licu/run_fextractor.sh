@@ -36,8 +36,13 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "--model=[MODEL] - Time-series feature extractor model/backend."
 	echo "  Available models:"
 	echo "    licu - light-curve-python handcrafted features"
-	echo "  Default: licu"
-	echo ""
+	echo "    astromer1 - Astromer 1 ONNX embedding"
+	echo "    astromer1-ztfdr20 - Astromer 1 ZTF DR20 ONNX embedding"
+	echo "    astromer2 - Astromer 2 ONNX embedding"
+	echo "    moment1-small - MOMENT-1 small ONNX embedding"
+	echo "    moment1-base - MOMENT-1 base ONNX embedding"
+	echo "    moment1-large - MOMENT-1 large ONNX embedding"
+	echo "  Default: licu"	
 
 	echo "=== TIME-SERIES PREPROCESSING OPTIONS ==="
 	echo "--input-sample-policy=[POLICY] - Samples passed to the backend: observed or completed. Default: observed"	
@@ -98,6 +103,8 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "--feature-set=[SET] - LiCu handcrafted feature set: basic, default, or full"
 	echo "--invalid-feature-policy=[POLICY] - LiCu non-finite output policy: zero or error"
 	echo "--min-samples=[N] - Minimum valid observed samples required per channel"
+	echo "--licu-embed-output=[OUTPUT] - ML embedding output: mean, max, or sequence"
+	echo "--licu-embed-reduction=[MODE] - ML reduction: beginning, end, middle, or non-overlapping-windows"	
 	echo ""
 
 	echo "=== SAVE OPTIONS ==="
@@ -197,6 +204,8 @@ BATCH_SIZE=""
 FEATURE_SET=""
 INVALID_FEATURE_POLICY=""
 MIN_SAMPLES=""
+LICU_EMBED_OUTPUT=""
+LICU_EMBED_REDUCTION=""
 
 # - Run options passed to fextractor
 SKIP_ERRORS_OPT=""
@@ -392,7 +401,14 @@ do
 			MIN_SAMPLES=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
+		--licu-embed-output=*)
+			LICU_EMBED_OUTPUT=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
 
+		--licu-embed-reduction=*)
+			LICU_EMBED_REDUCTION=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+		
 		# - FEXTRACTOR RUN OPTIONS
 		--device=*)
 			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
@@ -617,6 +633,15 @@ if [ "$MIN_SAMPLES" != "" ]; then
 	LICU_OPTS="$LICU_OPTS --min-samples=$MIN_SAMPLES "
 fi
 
+LICU_EMBED_OPTS=""
+
+if [ "$LICU_EMBED_OUTPUT" != "" ]; then
+	LICU_EMBED_OPTS="$LICU_EMBED_OPTS --licu-embed-output=$LICU_EMBED_OUTPUT "
+fi
+
+if [ "$LICU_EMBED_REDUCTION" != "" ]; then
+	LICU_EMBED_OPTS="$LICU_EMBED_OPTS --licu-embed-reduction=$LICU_EMBED_REDUCTION "
+fi
 
 FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
 
@@ -636,16 +661,30 @@ fi
 MODEL_OPTS=""
 
 if [ "$MODEL" = "licu" ]; then
-
 	BACKEND="licu"
 	MODEL_OPTS=""
 
+elif [ "$MODEL" = "astromer1" ] || \
+	 [ "$MODEL" = "astromer1-ztfdr20" ] || \
+	 [ "$MODEL" = "astromer2" ] || \
+	 [ "$MODEL" = "moment1-small" ] || \
+	 [ "$MODEL" = "moment1-base" ] || \
+	 [ "$MODEL" = "moment1-large" ]; then
+
+	BACKEND="licu_embed"
+
+	MODEL_PATH="$MODEL_DIR/$MODEL"
+	if [ ! -d "$MODEL_PATH" ]; then
+		echo "ERROR: Model directory '$MODEL_PATH' does not exist!"
+		exit 1
+	fi
+	
+	MODEL_OPTS="--model=$MODEL_PATH"
+
 else
-
 	echo "ERROR: Unknown/not supported MODEL argument '$MODEL'!"
-	echo "Available models: licu"
+	echo "Available models: licu, astromer1, astromer1-ztfdr20, astromer2, moment1-small, moment1-base, moment1-large"
 	exit 1
-
 fi
 
 RUN_OPTS="--backend=$BACKEND $FEXTRACTOR_RUN_OPTS "
@@ -654,6 +693,7 @@ echo "INFO: MODEL=$MODEL"
 echo "INFO: BACKEND=$BACKEND"
 echo "INFO: MODEL_OPTS=$MODEL_OPTS"
 echo "INFO: LICU_OPTS=$LICU_OPTS"
+echo "INFO: LICU_EMBED_OPTS=$LICU_EMBED_OPTS"
 
 #######################################
 ##   DEFINE GENERATE EXE SCRIPT FCN
@@ -771,6 +811,7 @@ generate_exec_script(){
 			$MODEL_OPTS \
 			$REPRESENTATION_OPTS \
 			$LICU_OPTS \
+			$LICU_EMBED_OPTS \
 			$PLOT_OPTS \
 			$SAVE_OPTS \
 			$RUN_OPTS "

@@ -93,4 +93,42 @@ def test_licu_factory_without_loading_library():
 		"completed"
 	)
 	
+def test_licu_embed_factory_without_loading_model():
+	config = ExtractorConfig(
+		backend="licu_embed",
+		model="/opt/models/astromer2",
+		device="cpu",
+		options={
+			"licu_embed_output": "sequence",
+			"aggregation": "mean_std",
+			"licu_embed_reduction": "end",
+			"min_samples": 3,
+			"input_sample_policy": "completed",
+		},
+	)
+
+	extractor = create_extractor(
+		config
+	)
+
+	assert extractor.backend == "licu_embed"
+	assert extractor.modality == "timeseries"
+
+	assert extractor.model_spec.name == (
+		"astromer2"
+	)
+
+	assert extractor.output == "sequence"
+	assert extractor.aggregation == "mean_std"
+	assert extractor.reduction == "end"
+	assert extractor.min_samples == 3
+
+	assert extractor.device == "cpu"
+
+	assert extractor.input_sample_policy == (
+		"completed"
+	)
+
+	assert not extractor.is_loaded
 	
+

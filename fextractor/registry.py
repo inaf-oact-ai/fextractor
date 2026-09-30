@@ -119,6 +119,23 @@ _BACKEND_SPECS = (
 		),
 		dependency_group="licu",
 	),
+	BackendSpec(
+		name="licu_embed",
+		modality="timeseries",
+		class_path=(
+			"fextractor.extractors.timeseries.licu_embed:"
+			"LiCuEmbeddingFeatureExtractor"
+		),
+		factory_path=(
+			"fextractor.extractors.timeseries.licu_embed:create"
+		),
+		aliases=(
+			"licu-embed",
+			"lightcurve-embed",
+			"light-curve-embed",
+		),
+		dependency_group="licu",
+	),	
 )
 
 _BACKENDS: dict[str, BackendSpec] = {}
