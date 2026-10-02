@@ -145,3 +145,72 @@ def test_copy_is_independent():
 	assert series.values[0, 0] == 1.0
 	assert series.times[0] == 10.0
 	assert series.metadata["source"] == "example"
+	
+def test_bands_length_must_match_values():
+	with pytest.raises(
+		ValueError,
+		match="bands length",
+	):
+		TimeSeries(
+			values=np.asarray([
+				1.0,
+				2.0,
+				3.0,
+			]),
+			bands=np.asarray([
+				"g",
+				"r",
+			]),
+		)
+
+
+def test_bands_are_preserved():
+	series = TimeSeries(
+		values=np.asarray([
+			1.0,
+			2.0,
+			3.0,
+		]),
+		bands=np.asarray([
+			"g",
+			"r",
+			"i",
+		]),
+	)
+
+	assert series.bands.tolist() == [
+		"g",
+		"r",
+		"i",
+	]
+
+
+def test_copy_preserves_independent_bands():
+	series = TimeSeries(
+		values=np.asarray([
+			1.0,
+			2.0,
+			3.0,
+		]),
+		bands=np.asarray([
+			"g",
+			"r",
+			"i",
+		]),
+	)
+
+	copied = series.copy()
+
+	copied.bands[0] = "i"
+
+	assert series.bands.tolist() == [
+		"g",
+		"r",
+		"i",
+	]
+
+	assert copied.bands.tolist() == [
+		"i",
+		"r",
+		"i",
+	]

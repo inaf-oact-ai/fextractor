@@ -840,5 +840,81 @@ def test_alignment_after_time_origin_transform():
 		== 59020.0
 	)
 	
-		
+def test_sort_timeseries_preserves_bands():
+	series = TimeSeries(
+		times=np.asarray([
+			3.0,
+			1.0,
+			2.0,
+		]),
+		values=np.asarray([
+			30.0,
+			10.0,
+			20.0,
+		]),
+		bands=np.asarray([
+			"i",
+			"g",
+			"r",
+		]),
+	)
+
+	config = TimeSeriesPreprocessConfig(
+		sort_time=True,
+	)
+
+	output = apply_timeseries_preprocessing(
+		series,
+		config,
+	)
+
+	assert output.bands.tolist() == [
+		"g",
+		"r",
+		"i",
+	]	
+	
+def test_alignment_window_preserves_bands():
+	series = TimeSeries(
+		times=np.asarray([
+			59000.0,
+			59010.0,
+			59020.0,
+			59030.0,
+			59050.0,
+		]),
+		values=np.asarray([
+			1.0,
+			3.0,
+			10.0,
+			4.0,
+			2.0,
+		]),
+		bands=np.asarray([
+			"g",
+			"r",
+			"i",
+			"g",
+			"r",
+		]),
+	)
+
+	config = TimeSeriesPreprocessConfig(
+		alignment="peak-max",
+		alignment_window_before=10.0,
+		alignment_window_after=20.0,
+	)
+
+	output = apply_timeseries_preprocessing(
+		series,
+		config,
+	)
+
+	assert output.bands.tolist() == [
+		"r",
+		"i",
+		"g",
+	]
+	
+
 	

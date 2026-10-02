@@ -92,6 +92,7 @@ class TimeSeriesFeatureExtractor(FeatureExtractor):
 				time_column=self.preprocessing.time_column,
 				value_columns=self.preprocessing.value_columns,
 				error_columns=self.preprocessing.error_columns,
+				band_column=self.preprocessing.band_column,
 				layout=self.preprocessing.layout,
 				value_prefixes=self.preprocessing.value_prefixes,
 				channel_names=self.preprocessing.channel_names,

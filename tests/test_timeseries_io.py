@@ -359,3 +359,228 @@ def test_read_timeseries_record_rejects_different_lengths():
 				"b",
 			),
 		)
+		
+def test_read_multiband_csv(
+	tmp_path,
+):
+	path = tmp_path / "multiband.csv"
+
+	path.write_text(
+		"time,flux,flux_err,band\n"
+		"1.0,10.0,0.1,g\n"
+		"2.0,11.0,0.2,r\n"
+		"3.0,12.0,0.3,i\n",
+		encoding="utf-8",
+	)
+
+	series = read_timeseries(
+		path,
+		time_column="time",
+		value_columns=(
+			"flux",
+		),
+		error_columns=(
+			"flux_err",
+		),
+		band_column="band",
+	)
+
+	assert series.values.shape == (
+		3,
+		1,
+	)
+
+	assert series.errors.shape == (
+		3,
+		1,
+	)
+
+	assert series.bands.tolist() == [
+		"g",
+		"r",
+		"i",
+	]
+
+	np.testing.assert_allclose(
+		series.times,
+		[
+			1.0,
+			2.0,
+			3.0,
+		],
+	)
+	
+def test_band_column_is_not_inferred_as_value(
+	tmp_path,
+):
+	path = tmp_path / "multiband.csv"
+
+	path.write_text(
+		"time,flux,band\n"
+		"1.0,10.0,g\n"
+		"2.0,11.0,r\n",
+		encoding="utf-8",
+	)
+
+	series = read_timeseries(
+		path,
+		time_column="time",
+		band_column="band",
+	)
+
+	assert series.values.shape == (
+		2,
+		1,
+	)
+
+	assert series.channel_names == (
+		"flux",
+	)
+
+	assert series.bands.tolist() == [
+		"g",
+		"r",
+	]
+	
+def test_read_timeseries_record_with_bands():
+	record = {
+		"time": [
+			59000.0,
+			59001.0,
+			59002.0,
+		],
+		"flux": [
+			10.0,
+			11.0,
+			12.0,
+		],
+		"flux_err": [
+			0.1,
+			0.2,
+			0.3,
+		],
+		"band": [
+			"g",
+			"r",
+			"i",
+		],
+	}
+
+	series = read_timeseries_record(
+		record,
+		value_keys=(
+			"flux",
+		),
+		error_keys=(
+			"flux_err",
+		),
+		time_key="time",
+		band_key="band",
+	)
+
+	assert series.values.shape == (
+		3,
+		1,
+	)
+
+	assert series.errors.shape == (
+		3,
+		1,
+	)
+
+	assert series.bands.tolist() == [
+		"g",
+		"r",
+		"i",
+	]
+	
+def test_read_timeseries_record_rejects_bad_band_length():
+	record = {
+		"time": [
+			1.0,
+			2.0,
+			3.0,
+		],
+		"flux": [
+			10.0,
+			11.0,
+			12.0,
+		],
+		"band": [
+			"g",
+			"r",
+		],
+	}
+
+	with pytest.raises(
+		ValueError,
+		match="Band field.*length",
+	):
+		read_timeseries_record(
+			record,
+			value_keys=(
+				"flux",
+			),
+			time_key="time",
+			band_key="band",
+		)
+		
+def test_wide_layout_rejects_band_column(
+	tmp_path,
+):
+	path = tmp_path / "wide.csv"
+
+	path.write_text(
+		"r1,r2,r3\n"
+		"1,2,3\n",
+		encoding="utf-8",
+	)
+
+	with pytest.raises(
+		ValueError,
+		match="band_column.*wide",
+	):
+		read_timeseries(
+			path,
+			layout="wide",
+			value_prefixes=(
+				"r",
+			),
+			band_column="band",
+		)
+		
+def test_read_npz_timeseries_with_bands(
+	tmp_path,
+):
+	path = tmp_path / "series.npz"
+
+	np.savez(
+		path,
+		values=np.asarray([
+			1.0,
+			2.0,
+			3.0,
+		]),
+		times=np.asarray([
+			10.0,
+			20.0,
+			30.0,
+		]),
+		bands=np.asarray([
+			"g",
+			"r",
+			"i",
+		]),
+	)
+
+	series = read_timeseries(
+		path
+	)
+
+	assert series.bands.tolist() == [
+		"g",
+		"r",
+		"i",
+	]
+	
+

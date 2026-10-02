@@ -87,6 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--time-column", default=None, help="Time-series timestamp column")
 	parser.add_argument("--value-columns", nargs="+", default=None, help="Time-series value column(s)")
 	parser.add_argument("--error-columns", nargs="+", default=None, help="Time-series uncertainty column(s)")
+	parser.add_argument("--band-column", default=None, help="Time-series observation-band column")
 	parser.add_argument("--regularize", action=argparse.BooleanOptionalAction, default=None, help="Regularize timestamps onto a fixed grid")
 	parser.add_argument("--cadence", type=float, default=None, help="Regularization cadence in timestamp units")
 	parser.add_argument("--missing-strategy", choices=("nan", "linear", "pchip", "akima", "cubic"), default=None, help="Missing-value treatment after regularization")
@@ -130,8 +131,42 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--feature-set", choices=("basic", "default", "full"), default=None, help="LiCu handcrafted feature set. If omitted, backend default is used.")
 	parser.add_argument("--invalid-feature-policy", choices=("error", "zero",), default=None, help="LiCu policy for non-finite feature values. If omitted, backend default is used.")
 	parser.add_argument("--min-samples", type=int, default=None, help="LiCu minimum number of valid selected samples required per channel.")
-	parser.add_argument("--licu-embed-output", choices=("mean", "max", "sequence"), default=None, help="LiCu ML embedding output. Model-specific validation is applied by the backend.")
+	parser.add_argument(
+		"--licu-embed-output",
+		choices=(
+			"mean",
+			"max",
+			"sequence",
+			"token",
+			"last",
+		),
+		default=None,
+		help=(
+			"LiCu ML embedding output. "
+			"Model-specific validation is applied by the backend."
+		),
+	)
 	parser.add_argument("--licu-embed-reduction", choices=("beginning", "end", "middle", "non-overlapping-windows"), default=None, help="LiCu ML light-curve reduction/windowing strategy. If omitted, the model default is used.")
+	
+	parser.add_argument(
+		"--licu-mag-zp",
+		type=float,
+		default=None,
+		help=(
+			"AB magnitude zero-point associated with flux values "
+			"for LiCu ATAT/ATCAT models. If omitted, model default is used."
+		),
+	)
+
+	parser.add_argument(
+		"--licu-allow-extra-bands",
+		action=argparse.BooleanOptionalAction,
+		default=None,
+		help=(
+			"Allow LiCu multiband models to ignore observations "
+			"whose band labels are not supported by the selected model."
+		),
+	)
 	
 	# - TIME SERIES INPUT LAYOUT OPTIONS
 	parser.add_argument("--timeseries-layout", choices=("long", "wide"), default=None, help="Time-series tabular layout")
@@ -145,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--metadata-columns", nargs="+", default=None, help="Additional sample-level metadata columns")
 	parser.add_argument("--time-start-key", default=None, help="Inline JSON field containing the start timestamp")
 	parser.add_argument("--cadence-key", default=None, help="Inline JSON field containing the sampling cadence")
+	parser.add_argument("--band-key", default=None, help="Inline JSON field containing one band label per observation")
 	
 	# == RUN OPTIONS ==
 	parser.add_argument("--skip-errors", action="store_true")
@@ -251,6 +287,11 @@ def _resolve_timeseries_preprocessing(
 		changes["error_columns"] = tuple(
 			args.error_columns
 		)
+		
+	if args.band_column is not None:
+		changes["band_column"] = (
+			args.band_column
+		)
 
 	if args.regularize is not None:
 		changes["regularize"] = (
@@ -320,6 +361,11 @@ def _resolve_timeseries_preprocessing(
 	if args.cadence_key is not None:
 		changes["cadence_key"] = (
 			args.cadence_key
+		)
+		
+	if args.band_key is not None:
+		changes["band_key"] = (
+			args.band_key
 		)
 
 	if args.time_transform is not None:
@@ -475,6 +521,16 @@ def _config_from_args(
 	if args.licu_embed_reduction is not None:
 		options["licu_embed_reduction"] = (
 			args.licu_embed_reduction
+		)
+		
+	if args.licu_mag_zp is not None:
+		options["licu_mag_zp"] = (
+			args.licu_mag_zp
+		)
+
+	if args.licu_allow_extra_bands is not None:
+		options["licu_allow_extra_bands"] = (
+			args.licu_allow_extra_bands
 		)
 
 	if args.input_sample_policy is not None:

@@ -21,9 +21,12 @@ class TimeSeries:
 	predicted_mask: np.ndarray | None = None
 	errors: np.ndarray | None = None
 	channel_names: tuple[str, ...] | None = None
+	bands: np.ndarray | None = None
 	metadata: dict = field(default_factory=dict)
 
 	def __post_init__(self) -> None:
+	
+		# - Validate values
 		values = np.asarray(
 			self.values,
 			dtype=np.float32,
@@ -42,6 +45,7 @@ class TimeSeries:
 
 		n_time, n_variates = values.shape
 
+		# - Validate times
 		if self.times is not None:
 			times = np.asarray(
 				self.times,
@@ -55,6 +59,20 @@ class TimeSeries:
 				)
 
 			self.times = times
+
+		# - Validate bands
+		if self.bands is not None:
+			bands = np.asarray(
+				self.bands
+			).reshape(-1)
+
+			if bands.shape[0] != n_time:
+				raise ValueError(
+					"bands length does not match values: "
+					f"{bands.shape[0]} != {n_time}"
+				)
+
+			self.bands = bands		
 
 		# - Handle observed mask
 		if self.observed_mask is None:
@@ -228,5 +246,10 @@ class TimeSeries:
 				else self.errors.copy()
 			),
 			channel_names=self.channel_names,
+			bands=(
+				None
+				if self.bands is None
+				else self.bands.copy()
+			),
 			metadata=self.metadata.copy(),
 		)

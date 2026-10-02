@@ -51,6 +51,7 @@ class TimeSeriesPreprocessConfig:
 	time_column: str | None = None
 	value_columns: tuple[str, ...] | None = None
 	error_columns: tuple[str, ...] | None = None
+	band_column: str | None = None
 
 	value_prefixes: tuple[str, ...] | None = None
 	channel_names: tuple[str, ...] | None = None
@@ -86,7 +87,7 @@ class TimeSeriesPreprocessConfig:
 	
 	time_start_key: str | None = None
 	cadence_key: str | None = None
-
+	band_key: str | None = None
 
 @dataclass(frozen=True)
 class TimeSeriesPreprocessProfile:
@@ -654,6 +655,13 @@ def _apply_alignment(
 			]
 		)
 
+	if output.bands is not None:
+		output.bands = (
+			output.bands[
+				keep
+			]
+		)
+
 	output.metadata.update({
 		"alignment_anchor_time_aligned": 0.0,
 		"alignment_window_before": window_before,
@@ -730,6 +738,12 @@ def apply_timeseries_preprocessing(
 				]
 			)
 
+		if output.bands is not None:
+			output.bands = (
+				output.bands[
+					order
+				]
+			)
 
 	# - Detect alignment anchor
 	output = _detect_alignment(

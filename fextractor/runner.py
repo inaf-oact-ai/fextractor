@@ -57,6 +57,7 @@ def _get_entry_source(
 			time_key=preprocessing.time_column,
 			time_start_key=preprocessing.time_start_key,
 			cadence_key=preprocessing.cadence_key,
+			band_key=preprocessing.band_key,
 		)
 
 	raise KeyError(

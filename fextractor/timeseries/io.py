@@ -73,6 +73,7 @@ def _select_default_value_columns(
 	table: Table,
 	time_column: str | None,
 	error_columns: Sequence[str] | None,
+	band_column: str | None = None,
 ) -> list[str]:
 	"""Infer numeric value columns when none are explicitly supplied."""
 
@@ -83,6 +84,11 @@ def _select_default_value_columns(
 
 	if error_columns is not None:
 		excluded.update(error_columns)
+		
+	if band_column is not None:
+		excluded.add(
+			band_column
+		)
 
 	candidates = []
 
@@ -498,9 +504,11 @@ def read_timeseries_record(
 	time_key: str | None = None,
 	time_start_key: str | None = None,
 	cadence_key: str | None = None,
+	band_key: str | None = None,
 ) -> TimeSeries:
 	"""Build a TimeSeries from arrays stored directly in a mapping."""
 
+	# - Check value keys
 	if not value_keys:
 		raise ValueError(
 			"value_keys must contain at least one time-series field"
@@ -510,6 +518,7 @@ def read_timeseries_record(
 		value_keys
 	)
 	
+	# - Check error keys
 	if error_keys is not None:
 		error_keys = tuple(
 			error_keys
@@ -520,7 +529,8 @@ def read_timeseries_record(
 				"error_keys must contain one field "
 				"per value field"
 			)
-
+	
+	# - Check channel names
 	if channel_names is None:
 		channel_names = value_keys
 
@@ -534,6 +544,7 @@ def read_timeseries_record(
 				"channel_names must contain one name per value key"
 			)
 
+	# - Fill values
 	arrays = []
 
 	for key in value_keys:
@@ -574,6 +585,7 @@ def read_timeseries_record(
 		arrays
 	)
 	
+	# - Fill errors
 	errors = None
 
 	if error_keys is not None:
@@ -613,6 +625,7 @@ def read_timeseries_record(
 			error_arrays
 		)
 
+	# - Fill times
 	times = None
 
 	if time_key is not None:
@@ -681,6 +694,33 @@ def read_timeseries_record(
 			* cadence
 		)
 
+	# - Fill bands
+	bands = None
+
+	if band_key is not None:
+		if band_key not in record:
+			raise KeyError(
+				f"Band field '{band_key}' not found in record"
+			)
+
+		bands = np.asarray(
+			record[
+				band_key
+			]
+		)
+
+		if bands.ndim != 1:
+			raise ValueError(
+				f"Band field '{band_key}' must be one-dimensional"
+			)
+
+		if len(bands) != n_time:
+			raise ValueError(
+				f"Band field '{band_key}' has length {len(bands)}, "
+				f"expected {n_time}"
+			)
+		
+			
 	metadata = {
 		"source_type": "inline_record",
 	}
@@ -709,6 +749,11 @@ def read_timeseries_record(
 			cadence_key
 		)
 
+	if band_key is not None:
+		excluded.add(
+			band_key
+		)
+
 	for key, value in record.items():
 		if key in excluded:
 			continue
@@ -732,6 +777,7 @@ def read_timeseries_record(
 		values=values,
 		times=times,
 		errors=errors,
+		bands=bands,
 		channel_names=tuple(
 			channel_names
 		),
@@ -744,6 +790,7 @@ def read_timeseries(
 	time_column: str | None = None,
 	value_columns: Sequence[str] | None = None,
 	error_columns: Sequence[str] | None = None,
+	band_column: str | None = None,
 	layout: str = "long",
 	value_prefixes: Sequence[str] | None = None,
 	error_prefixes: Sequence[str] | None = None,
@@ -795,10 +842,24 @@ def read_timeseries(
 			else None
 		)
 
+		if "bands" in payload:
+			bands = payload[
+				"bands"
+			]
+
+		elif "band" in payload:
+			bands = payload[
+				"band"
+			]
+
+		else:
+			bands = None
+
 		return TimeSeries(
 			values=values,
 			times=times,
 			errors=errors,
+			bands=bands,
 			metadata={
 				"source": str(path),
 			},
@@ -812,7 +873,14 @@ def read_timeseries(
 
 	table = _read_table(path)
 	
+	
 	if layout == "wide":
+		if band_column is not None:
+			raise ValueError(
+				"band_column is not supported with wide time-series layout. "
+				"LiCu multiband models require long-layout observation data."
+			)
+
 		return _read_wide_timeseries(
 			table=table,
 			path=path,
@@ -833,18 +901,20 @@ def read_timeseries(
 			"Supported values: long, wide"
 		)
 		
-
+	# - Fill value_columns
 	if value_columns is None:
 		value_columns = _select_default_value_columns(
 			table,
 			time_column=time_column,
 			error_columns=error_columns,
+			band_column=band_column,
 		)
 
 	value_columns = list(
 		value_columns
 	)
 
+	# - Fill values
 	values = np.column_stack([
 		_column_to_array(
 			table,
@@ -854,6 +924,7 @@ def read_timeseries(
 		for name in value_columns
 	])
 
+	# - Fill times
 	times = None
 
 	if time_column is not None:
@@ -863,6 +934,7 @@ def read_timeseries(
 			np.float64,
 		)
 
+	# - Fill errors
 	errors = None
 
 	if error_columns is not None:
@@ -885,10 +957,39 @@ def read_timeseries(
 			for name in error_columns
 		])
 
+
+	# - Fill bands
+	bands = None
+
+	if band_column is not None:
+		if band_column not in table.colnames:
+			raise KeyError(
+				f"Band column '{band_column}' not found. "
+				f"Available columns: {', '.join(table.colnames)}"
+			)
+
+		bands = np.asarray(
+			table[
+				band_column
+			]
+		)
+
+		if bands.ndim != 1:
+			raise ValueError(
+				f"Band column '{band_column}' must be one-dimensional"
+			)
+
+		if len(bands) != values.shape[0]:
+			raise ValueError(
+				f"Band column '{band_column}' has length {len(bands)}, "
+				f"expected {values.shape[0]}"
+			)
+
 	return TimeSeries(
 		values=values,
 		times=times,
 		errors=errors,
+		bands=bands,
 		channel_names=tuple(
 			value_columns
 		),
@@ -897,5 +998,6 @@ def read_timeseries(
 			"time_column": time_column,
 			"value_columns": value_columns,
 			"error_columns": error_columns,
+			"band_column": band_column,
 		},
 	)
