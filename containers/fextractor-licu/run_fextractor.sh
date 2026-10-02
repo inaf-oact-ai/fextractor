@@ -62,6 +62,9 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "--channel-names=[NAME1:NAME2:...] - Logical names assigned to time-series channels"
 	echo "--label-column=[COLUMN] - Optional sample-level label column for wide-layout input"
 	echo "--metadata-columns=[COL1:COL2:...] - Additional sample-level metadata columns"
+	echo "--band-column=[COLUMN] - Long-layout column containing one photometric band label per observation"
+	echo "--band-key=[KEY] - Inline JSON field containing one photometric band label per observation"
+	
 	echo ""
 	echo "--time-start-key=[KEY] - Inline JSON field containing the start timestamp"
 	echo "--cadence-key=[KEY] - Inline JSON field containing the sampling cadence"
@@ -105,6 +108,8 @@ if [ "$NARGS" -lt 1 ]; then
 	echo "--min-samples=[N] - Minimum valid observed samples required per channel"
 	echo "--licu-embed-output=[OUTPUT] - ML embedding output: mean, max, or sequence"
 	echo "--licu-embed-reduction=[MODE] - ML reduction: beginning, end, middle, or non-overlapping-windows"	
+	echo "--licu-mag-zp=[VALUE] - Input flux AB zero-point for ATAT/ATCAT"
+	echo "--licu-allow-extra-bands - Ignore observations with unsupported bands"
 	echo ""
 
 	echo "=== SAVE OPTIONS ==="
@@ -162,6 +167,7 @@ TIMESERIES_LAYOUT=""
 TIME_COLUMN=""
 VALUE_COLUMNS=""
 ERROR_COLUMNS=""
+BAND_COLUMN=""
 VALUE_PREFIXES=""
 ERROR_PREFIXES=""
 TIME_PREFIX=""
@@ -172,6 +178,7 @@ LABEL_COLUMN=""
 METADATA_COLUMNS=""
 TIME_START_KEY=""
 CADENCE_KEY=""
+BAND_KEY=""
 
 TIME_TRANSFORM=""
 VALUE_TRANSFORM=""
@@ -206,6 +213,8 @@ INVALID_FEATURE_POLICY=""
 MIN_SAMPLES=""
 LICU_EMBED_OUTPUT=""
 LICU_EMBED_REDUCTION=""
+LICU_MAG_ZP=""
+LICU_ALLOW_EXTRA_BANDS_OPT=""
 
 # - Run options passed to fextractor
 SKIP_ERRORS_OPT=""
@@ -267,6 +276,10 @@ do
 		--error-columns=*)
 			ERROR_COLUMNS=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
+		
+		--band-column=*)
+			BAND_COLUMN=`echo "$item" | sed 's/^[^=]*=//'`
+		;;		
 
 		--value-prefixes=*)
 			VALUE_PREFIXES=`echo "$item" | sed 's/^[^=]*=//'`
@@ -306,6 +319,10 @@ do
 
 		--cadence-key=*)
 			CADENCE_KEY=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+		
+		--band-key=*)
+			BAND_KEY=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 
 		--time-transform=*)
@@ -409,6 +426,18 @@ do
 			LICU_EMBED_REDUCTION=`echo "$item" | sed 's/^[^=]*=//'`
 		;;
 		
+		--licu-mag-zp=*)
+			LICU_MAG_ZP=`echo "$item" | sed 's/^[^=]*=//'`
+		;;
+
+		--licu-allow-extra-bands)
+			LICU_ALLOW_EXTRA_BANDS_OPT="--licu-allow-extra-bands"
+		;;
+
+		--no-licu-allow-extra-bands)
+			LICU_ALLOW_EXTRA_BANDS_OPT="--no-licu-allow-extra-bands"
+		;;
+		
 		# - FEXTRACTOR RUN OPTIONS
 		--device=*)
 			DEVICE=`echo "$item" | sed 's/^[^=]*=//'`
@@ -490,6 +519,10 @@ if [ "$TIME_COLUMN" != "" ]; then
 	PREPROC_OPTS="$PREPROC_OPTS --time-column=\"$TIME_COLUMN\" "
 fi
 
+if [ "$BAND_COLUMN" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --band-column=\"$BAND_COLUMN\" "
+fi
+
 if [ "$LABEL_COLUMN" != "" ]; then
 	PREPROC_OPTS="$PREPROC_OPTS --label-column=\"$LABEL_COLUMN\" "
 fi
@@ -500,6 +533,10 @@ fi
 
 if [ "$CADENCE_KEY" != "" ]; then
 	PREPROC_OPTS="$PREPROC_OPTS --cadence-key=\"$CADENCE_KEY\" "
+fi
+
+if [ "$BAND_KEY" != "" ]; then
+	PREPROC_OPTS="$PREPROC_OPTS --band-key=\"$BAND_KEY\" "
 fi
 
 if [ "$TIME_TRANSFORM" != "" ]; then
@@ -643,6 +680,14 @@ if [ "$LICU_EMBED_REDUCTION" != "" ]; then
 	LICU_EMBED_OPTS="$LICU_EMBED_OPTS --licu-embed-reduction=$LICU_EMBED_REDUCTION "
 fi
 
+if [ "$LICU_MAG_ZP" != "" ]; then
+	LICU_EMBED_OPTS="$LICU_EMBED_OPTS --licu-mag-zp=$LICU_MAG_ZP "
+fi
+
+if [ "$LICU_ALLOW_EXTRA_BANDS_OPT" != "" ]; then
+	LICU_EMBED_OPTS="$LICU_EMBED_OPTS $LICU_ALLOW_EXTRA_BANDS_OPT "
+fi
+
 FEXTRACTOR_RUN_OPTS="--device=$DEVICE $SKIP_ERRORS_OPT "
 
 SAVE_OPTS="--outfile=$OUTFILE "
@@ -669,8 +714,11 @@ elif [ "$MODEL" = "astromer1" ] || \
 	 [ "$MODEL" = "astromer2" ] || \
 	 [ "$MODEL" = "moment1-small" ] || \
 	 [ "$MODEL" = "moment1-base" ] || \
-	 [ "$MODEL" = "moment1-large" ]; then
-
+	 [ "$MODEL" = "moment1-large" ] || \
+	 [ "$MODEL" = "astra-clr" ] || \
+	 [ "$MODEL" = "atat" ] || \
+	 [ "$MODEL" = "atcat" ]; then
+	 
 	BACKEND="licu_embed"
 
 	MODEL_PATH="$MODEL_DIR/$MODEL"
@@ -683,7 +731,7 @@ elif [ "$MODEL" = "astromer1" ] || \
 
 else
 	echo "ERROR: Unknown/not supported MODEL argument '$MODEL'!"
-	echo "Available models: licu, astromer1, astromer1-ztfdr20, astromer2, moment1-small, moment1-base, moment1-large"
+	echo "Available models: licu, astromer1, astromer1-ztfdr20, astromer2, moment1-small, moment1-base, moment1-large, astra-clr, atat, atcat"
 	exit 1
 fi
 
