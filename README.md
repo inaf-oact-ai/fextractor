@@ -49,35 +49,27 @@ Supported scientific-image preprocessing includes:
 
 Registered time-series representation backends currently include:
 
-| Backend | Model | Default model |
+| Backend | Model family | Default model / purpose |
 | --- | --- | --- |
 | `chronos2` | Amazon Chronos-2 | `amazon/chronos-2` |
 | `moirai2` | Salesforce Moirai-2 | `Salesforce/moirai-2.0-R-small` |
+| `licu` | light-curve handcrafted features | Statistical/time-domain feature extraction |
+| `licu_embed` | Astromer | Astromer 1, Astromer 1 ZTF DR20, Astromer 2 |
+| `licu_embed` | MOMENT-1 | small, base and large variants |
+| `licu_embed` | AstraCLR | Native multiband learned representation |
+| `licu_embed` | ATAT | Native multiband learned representation |
+| `licu_embed` | ATCAT | Native multiband learned representation |
 
 Aliases:
 
-- `chronos` → `chronos2`
-- `moirai` → `moirai2`
+- `chronos` -> `chronos2`
+- `moirai` -> `moirai2`
 
-Both backends expose contextual model representations and reduce token-level representations to one feature vector through a configurable aggregation strategy.
+Chronos-2 and Moirai-2 expose contextual model representations and reduce token-level representations to one feature vector through a configurable aggregation strategy. Supported aggregation modes include `mean`, `std`, `max`, `mean_std`, `mean_max`, `mean_std_max`, `last`, `reg`, and `flatten`; `mean_std` is the current default for both extractors.
 
-Supported aggregation modes are:
+The LiCu integration provides two complementary paths. The `licu` backend computes handcrafted light-curve features. The `licu_embed` backend exposes learned representations from light-curve embedding models. Astromer and MOMENT-1 models process value channels independently and concatenate their embeddings for multichannel inputs. AstraCLR, ATAT and ATCAT instead consume a native multiband light curve with one value, timestamp and band label per observation.
 
-```text
-mean
-std
-max
-mean_std
-mean_max
-mean_std_max
-last
-reg
-flatten
-```
-
-`mean_std` is the default for the current Chronos-2 and Moirai-2 extractors.
-
-The time-series architecture is backend-neutral, so additional time-series embedding models can be registered without changing the input/output runner.
+The time-series architecture remains backend-neutral, so additional embedding models can be registered without changing the input/output runner.
 
 ## Installation
 
@@ -102,6 +94,7 @@ pip install -e '.[siglip2]'
 
 pip install -e '.[chronos]'
 pip install -e '.[moirai]'
+pip install -e '.[licu]'
 ```
 
 For time-series diagnostic plots:
@@ -527,6 +520,121 @@ by_variate
 interleave_time
 ```
 
+## LiCu handcrafted features
+
+The `licu` backend computes statistical and time-domain light-curve features without a learned representation model. It processes each value channel independently and concatenates the resulting per-channel feature vectors.
+
+Useful options include:
+
+```bash
+--feature-set basic
+--feature-set default
+--feature-set full
+--invalid-feature-policy zero
+--min-samples 10
+```
+
+Measurement uncertainties may be supplied with `--error-columns`. The common time-series preprocessing pipeline can be used before handcrafted extraction, including regularization where appropriate.
+
+## LiCu learned embeddings
+
+The `licu_embed` backend provides a common interface to learned light-curve representation models from the LiCu/light-curve stack.
+
+### Single-channel embedding models
+
+The currently supported single-channel families are:
+
+- Astromer 1;
+- Astromer 1 ZTF DR20;
+- Astromer 2;
+- MOMENT-1 small;
+- MOMENT-1 base;
+- MOMENT-1 large.
+
+Each selected value channel is embedded independently and the resulting vectors are concatenated. Astromer models use timestamps and naturally support irregularly sampled observations. MOMENT-1 consumes the ordered value sequence. These models do not consume measurement uncertainties directly.
+
+Model-native output modes are:
+
+| Model | `--licu-embed-output` |
+| --- | --- |
+| Astromer 1 / ZTF DR20 / Astromer 2 | `mean`, `max`, `sequence` |
+| MOMENT-1 small/base/large | `mean`, `sequence` |
+
+When `sequence` is selected, the common `--aggregation` option can reduce the sequence representation to a fixed-size vector.
+
+### Native multiband embedding models
+
+AstraCLR, ATAT and ATCAT operate on a native multiband observation stream. Input uses long layout with exactly one value field plus a timestamp and a photometric-band label for every observation.
+
+For inline JSON, the relevant selectors are typically:
+
+```bash
+--timeseries-layout long \
+--time-column mjd \
+--value-columns mag \
+--error-columns mag_err \
+--band-key band
+```
+
+For tabular long-format input, use `--band-column` instead of `--band-key`.
+
+Current requirements and model-specific behavior are:
+
+| Model | Errors | Output modes | Magnitude zero point |
+| --- | --- | --- | --- |
+| AstraCLR | required | `mean` | not used |
+| ATAT | optional | `token`, `mean`, `sequence` | supported |
+| ATCAT | required | `last`, `mean`, `sequence` | supported |
+
+`--licu-mag-zp` supplies the AB magnitude zero point associated with input fluxes for ATAT and ATCAT. `--licu-allow-extra-bands` allows observations with unsupported band labels to be ignored rather than rejected.
+
+The observation reduction/windowing strategy is controlled by `--licu-embed-reduction`; supported choices are `beginning`, `end`, `middle`, and `non-overlapping-windows`. Availability and the most useful choice depend on the selected model.
+
+Native multiband LiCu embedders do not use the common time-series regularization pipeline. Supply the original observation timestamps and band assignments directly.
+
+### AstraCLR example
+
+```bash
+fextractor \
+  --backend licu_embed \
+  --model /path/to/astra-clr \
+  --inputfile lightcurve.json \
+  --timeseries-layout long \
+  --time-column mjd \
+  --value-columns mag \
+  --error-columns mag_err \
+  --band-key band \
+  --input-sample-policy observed \
+  --min-samples 10 \
+  --licu-embed-output mean \
+  --licu-embed-reduction beginning \
+  --outfile astra_clr_features.json
+```
+
+### ATCAT example
+
+```bash
+fextractor \
+  --backend licu_embed \
+  --model /path/to/atcat \
+  --inputfile lightcurve.json \
+  --timeseries-layout long \
+  --time-column mjd \
+  --value-columns flux \
+  --error-columns flux_err \
+  --band-key band \
+  --input-sample-policy observed \
+  --min-samples 10 \
+  --licu-embed-output last \
+  --licu-embed-reduction non-overlapping-windows \
+  --licu-mag-zp 31.4 \
+  --outfile atcat_features.json
+```
+
+### Input sample policy
+
+`--input-sample-policy observed` passes only measured/bin-observed samples to the extractor. `--input-sample-policy completed` additionally permits samples generated by interpolation or Gaussian-process prediction. The latter is required when GP regularization is used because the regularized series consists of GP predictions.
+
 ## Diagnostic time-series plots
 
 `fextractor` can save diagnostic PNGs showing the original and/or preprocessed time series.
@@ -775,6 +883,7 @@ fextractor-torch
 fextractor-chronos
 fextractor-moirai
 fextractor-fats
+fextractor-licu
 ```
 
 The separate images avoid forcing mutually incompatible or heavyweight ML stacks into a single runtime.
