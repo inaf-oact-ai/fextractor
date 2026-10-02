@@ -89,3 +89,67 @@ def test_falcon1_rejects_empty_selected_channel():
 
 	with pytest.raises(ValueError, match="at least one selected finite sample per channel"):
 		extractor._to_falcon_input(series)
+		
+		
+def test_falcon1_token_representation(monkeypatch):
+	extractor = Falcon1FeatureExtractor(device="cpu")
+	extractor.torch = pytest.importorskip("torch")
+
+	class FakeConfig:
+		mask_pad_value = 255.0
+
+	class FakeCoreModel:
+		config = FakeConfig()
+
+	class FakeModel:
+		def parameters(self):
+			yield extractor.torch.nn.Parameter(extractor.torch.zeros(1))
+
+	extractor.model = FakeModel()
+
+	monkeypatch.setattr(extractor, "_get_core_model", lambda: FakeCoreModel())
+	monkeypatch.setattr(
+		extractor,
+		"_capture_shared_expert_tokens",
+		lambda input_tensor: np.asarray([
+			[
+				[1.0, 2.0],
+				[3.0, 4.0],
+			]
+		], dtype=np.float32),
+	)
+
+	series = TimeSeries(values=np.asarray([1.0, 2.0]))
+
+	representation = extractor.extract_tokens(series)
+
+	assert representation.context_tokens.shape == (1, 2, 2)
+	np.testing.assert_allclose(
+		representation.context_tokens,
+		[[[1.0, 2.0], [3.0, 4.0]]],
+	)
+	
+	
+def test_falcon1_rejects_native_mask_sentinel(monkeypatch):
+	extractor = Falcon1FeatureExtractor(device="cpu")
+	extractor.torch = pytest.importorskip("torch")
+
+	class FakeConfig:
+		mask_pad_value = 255.0
+
+	class FakeCoreModel:
+		config = FakeConfig()
+
+	class FakeModel:
+		def parameters(self):
+			yield extractor.torch.nn.Parameter(extractor.torch.zeros(1))
+
+	extractor.model = FakeModel()
+	monkeypatch.setattr(extractor, "_get_core_model", lambda: FakeCoreModel())
+
+	series = TimeSeries(values=np.asarray([1.0, 255.0, 3.0]))
+
+	with pytest.raises(ValueError, match="native mask sentinel"):
+		extractor.extract_tokens(series)
+		
+

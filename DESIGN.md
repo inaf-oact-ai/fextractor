@@ -61,7 +61,8 @@ Examples include:
 - ImageNet-style normalization;
 - Hugging Face image processors;
 - Chronos input preparation;
-- Moirai patch/token construction.
+- Moirai patch/token construction;
+- Falcon-1 masking, RevIN and latent-token extraction.
 
 This split prevents model-specific assumptions from leaking into scientific
 domain preprocessing.
@@ -92,12 +93,25 @@ available:
 The I/O layer supports long and wide tabular layouts as well as arrays embedded
 directly in JSON datalist records.
 
-Chronos-2 and Moirai-2 are currently implemented as learned time-series
-representation backends.
+Chronos-2, Moirai-2 and Falcon-1 are currently implemented as learned
+time-series representation backends.
 
-Both expose contextual token representations through the shared time-series
+They expose contextual token representations through the shared time-series
 extractor abstraction. Token representations can then be converted into one
 feature vector using a configurable aggregation strategy.
+
+Falcon-1 does not expose a dedicated embedding API. Its forecasting backbone
+contains multiple routed MoE experts plus a shared expert at each layer.
+FEXTRACTOR captures the final normalized hidden patch states of the shared
+expert from every MoE layer and concatenates them along the token axis. This
+produces a stable representation with shape `[channel, token, hidden]` while
+avoiding forecast/backcast values and sample-dependent token layouts from the
+routed experts, whose patch sizes may differ.
+
+Falcon-1 follows the upstream model's independent-channel semantics for
+multivariate inputs. Model-native RevIN normalization remains inside Falcon;
+timestamp regularization and domain preprocessing remain the responsibility
+of the shared FEXTRACTOR preprocessing pipeline.
 
 This separation is intentional: future time-series models should generally
 need to implement model-specific token extraction while reusing the canonical
@@ -169,7 +183,7 @@ stacks. Backend-specific containers are therefore preferred over a monolithic
 runtime.
 
 Dedicated runtime families currently exist for TensorFlow, Torch image models,
-Chronos, and Moirai.
+Chronos, Moirai, and Falcon.
 
 A separate FATS container provides compatibility with the legacy Python 2.7
 FATS package. FATS is intentionally isolated from the Python 3 core package and

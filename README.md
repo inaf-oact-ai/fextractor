@@ -401,7 +401,7 @@ This shifts the selected anchor to time zero and optionally crops the physical t
 
 ### Regularization
 
-Chronos-2 and Moirai-2 operate on regularly sampled sequences when timestamps are present.
+Chronos-2, Moirai-2 and Falcon-1 operate on regularly sampled sequences when timestamps are present.
 
 Irregular time series can therefore be regularized before representation extraction:
 
@@ -541,6 +541,10 @@ fextractor \
   --cadence 1.0 \
   --aggregation mean_std \
   --outfile falcon1_features.json
+```
+
+`falcon` is accepted as an alias for `falcon1`.
+
 
 ## LiCu handcrafted features
 
