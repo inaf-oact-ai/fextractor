@@ -104,6 +104,17 @@ _BACKEND_SPECS = (
 		dependency_group="moirai",
 	),
 	BackendSpec(
+		name="falcon1",
+		modality="timeseries",
+		class_path="fextractor.extractors.timeseries.falcon1:Falcon1FeatureExtractor",
+		factory_path="fextractor.extractors.timeseries.falcon1:create",
+		aliases=(
+			"falcon",
+		),
+		default_model="ant-intl/Falcon-TST_Large",
+		dependency_group="falcon",
+	),
+	BackendSpec(
 		name="licu",
 		modality="timeseries",
 		class_path=(

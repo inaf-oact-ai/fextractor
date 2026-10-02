@@ -53,6 +53,7 @@ Registered time-series representation backends currently include:
 | --- | --- | --- |
 | `chronos2` | Amazon Chronos-2 | `amazon/chronos-2` |
 | `moirai2` | Salesforce Moirai-2 | `Salesforce/moirai-2.0-R-small` |
+| `falcon1` | Ant International Falcon-1 | `ant-intl/Falcon-TST_Large` |
 | `licu` | light-curve handcrafted features | Statistical/time-domain feature extraction |
 | `licu_embed` | Astromer | Astromer 1, Astromer 1 ZTF DR20, Astromer 2 |
 | `licu_embed` | MOMENT-1 | small, base and large variants |
@@ -64,8 +65,11 @@ Aliases:
 
 - `chronos` -> `chronos2`
 - `moirai` -> `moirai2`
+- `falcon` -> `falcon1`
 
-Chronos-2 and Moirai-2 expose contextual model representations and reduce token-level representations to one feature vector through a configurable aggregation strategy. Supported aggregation modes include `mean`, `std`, `max`, `mean_std`, `mean_max`, `mean_std_max`, `last`, `reg`, and `flatten`; `mean_std` is the current default for both extractors.
+Chronos-2, Moirai-2 and Falcon-1 expose contextual model representations and reduce token-level representations to one feature vector through a configurable aggregation strategy. Falcon-1 representations are collected from the contextual hidden states of the shared expert across all MoE layers, before the forecasting output projection. Supported aggregation modes include `mean`, `std`, `max`, `mean_std`, `mean_max`, `mean_std_max`, `last`, `reg`, and `flatten`; `mean_std` is the default for the token-based extractors. The `reg` aggregation is only available to representations that expose a dedicated REG token.
+
+Falcon-1 processes multichannel input as independent channels, following the model's native inference semantics. The resulting hidden representation has canonical shape `[channel, token, hidden]`, after which FEXTRACTOR applies the selected aggregation strategy. Falcon-1 requires regularly sampled input; irregular time series should be regularized through the shared FEXTRACTOR preprocessing pipeline.
 
 The LiCu integration provides two complementary paths. The `licu` backend computes handcrafted light-curve features. The `licu_embed` backend exposes learned representations from light-curve embedding models. Astromer and MOMENT-1 models process value channels independently and concatenate their embeddings for multichannel inputs. AstraCLR, ATAT and ATCAT instead consume a native multiband light curve with one value, timestamp and band label per observation.
 
@@ -94,8 +98,11 @@ pip install -e '.[siglip2]'
 
 pip install -e '.[chronos]'
 pip install -e '.[moirai]'
+pip install -e '.[falcon]'
 pip install -e '.[licu]'
 ```
+
+Falcon-1 currently requires `transformers==4.40.1`, as specified by the upstream model. For this reason the `falcon` dependency group is intentionally kept separate from the aggregate Torch dependency groups used by image backends requiring newer Transformers releases.
 
 For time-series diagnostic plots:
 
@@ -519,6 +526,21 @@ Available token orders for `time_variate`:
 by_variate
 interleave_time
 ```
+
+## Falcon-1
+
+Falcon-1 uses the pretrained `ant-intl/Falcon-TST_Large` model. FEXTRACTOR captures contextual hidden states from the model's shared MoE expert path rather than using forecast values as features.
+
+```bash
+fextractor \
+  --backend falcon1 \
+  --inputfile series.csv \
+  --time-column time \
+  --value-columns flux \
+  --regularize \
+  --cadence 1.0 \
+  --aggregation mean_std \
+  --outfile falcon1_features.json
 
 ## LiCu handcrafted features
 

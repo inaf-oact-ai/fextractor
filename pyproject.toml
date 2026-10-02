@@ -66,6 +66,12 @@ moirai = [
 	"uni2ts>=2.0,<3"
 ]
 
+falcon = [
+	"torch>=2.0",
+	"transformers==4.40.1",
+	"einops>=0.7"
+]
+
 licu = [
 	"light-curve>=0.13.3,<0.14"
 ]

@@ -67,6 +67,28 @@ def test_chronos_factory_without_loading_model():
 	assert not extractor.is_loaded
 	
 	
+def test_falcon1_factory_without_loading_model():
+	config = ExtractorConfig(
+		backend="falcon1",
+		device="cpu",
+		options={
+			"aggregation": "mean_std",
+			"context_length": 2048,
+			"input_sample_policy": "completed",
+		},
+	)
+
+	extractor = create_extractor(config)
+
+	assert extractor.backend == "falcon1"
+	assert extractor.modality == "timeseries"
+	assert extractor.model_name == "ant-intl/Falcon-TST_Large"
+	assert extractor.aggregation == "mean_std"
+	assert extractor.context_length == 2048
+	assert extractor.input_sample_policy == "completed"
+	assert extractor.device == "cpu"
+	assert not extractor.is_loaded	
+	
 def test_licu_factory_without_loading_library():
 	config = ExtractorConfig(
 		backend="licu",
