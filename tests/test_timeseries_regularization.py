@@ -630,16 +630,68 @@ def test_make_regular_grid():
 		],
 	)
 	
-def test_make_regular_grid_requires_integer_number_of_intervals():
-	with pytest.raises(
-		ValueError,
-		match="integer multiple",
-	):
-		make_regular_grid(
-			start=-2.0,
-			stop=3.0,
-			cadence=2.0,
-		)
+def test_make_regular_grid_covers_fractional_span():
+	grid = make_regular_grid(
+		start=-2.0,
+		stop=3.0,
+		cadence=2.0,
+	)
+
+	np.testing.assert_allclose(
+		grid,
+		[
+			-2.0,
+			0.0,
+			2.0,
+			4.0,
+		],
+	)
+		
+		
+def test_make_regular_grid_covers_irregular_mjd_span():
+	grid = make_regular_grid(
+		start=0.0,
+		stop=107.23,
+		cadence=1.0,
+	)
+
+	assert grid.size == 109
+
+	assert grid[0] == pytest.approx(
+		0.0
+	)
+
+	assert grid[-1] == pytest.approx(
+		108.0
+	)		
+		
+def test_regularization_keeps_sample_near_fractional_stop():
+	series = TimeSeries(
+		times=np.asarray([
+			0.0,
+			50.2,
+			107.23,
+		]),
+		values=np.asarray([
+			1.0,
+			2.0,
+			3.0,
+		]),
+	)
+
+	output = regularize_timeseries(
+		series,
+		cadence=1.0,
+		missing_strategy="nan",
+	)
+
+	assert output.times[-1] == pytest.approx(
+		108.0
+	)
+
+	assert output.values[107, 0] == pytest.approx(
+		3.0
+	)		
 		
 def test_regularization_method_defaults_to_bin():
 	config = TimeSeriesPreprocessConfig()

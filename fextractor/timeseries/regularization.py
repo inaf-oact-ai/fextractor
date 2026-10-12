@@ -388,7 +388,11 @@ def make_regular_grid(
 	stop: float,
 	cadence: float,
 ) -> np.ndarray:
-	"""Construct a regular temporal grid."""
+	"""Construct a regular temporal grid covering the requested interval.
+
+	The final grid point may extend beyond ``stop`` by less than one cadence
+	when the requested span is not an integer multiple of the cadence.
+	"""
 
 	start = float(
 		start
@@ -438,22 +442,27 @@ def make_regular_grid(
 		/ cadence
 	)
 
-	n_intervals = int(
+	n_intervals_rounded = int(
 		np.round(
 			n_intervals_float
 		)
 	)
 
-	if not np.isclose(
+	if np.isclose(
 		n_intervals_float,
-		n_intervals,
+		n_intervals_rounded,
 		rtol=1.0e-9,
 		atol=1.0e-12,
 	):
-		raise ValueError(
-			"Regularization grid span must be an integer "
-			"multiple of cadence: "
-			f"start={start}, stop={stop}, cadence={cadence}"
+		n_intervals = (
+			n_intervals_rounded
+		)
+
+	else:
+		n_intervals = int(
+			np.ceil(
+				n_intervals_float
+			)
 		)
 
 	n_grid = (
@@ -907,8 +916,10 @@ def regularize_timeseries(
 		"cadence": cadence,
 		"missing_strategy": missing_strategy,
 		"bin_aggregation": bin_aggregation,
-		"regularization_grid_start": start,
-		"regularization_grid_stop": stop,
+		"regularization_grid_start": float(grid[0]),
+		"regularization_grid_stop": float(grid[-1]),
+		"regularization_requested_start": start,
+		"regularization_requested_stop": stop,
 		"regularization_grid_size": n_grid,
 	})
 	
